@@ -10,10 +10,33 @@
 const WIDTH = window.innerWidth;
 const HEIGHT = window.innerHeight;
 
+const COLORS_GRAND_CANYON = {
+    "bg": 0x3d232b,
+    "fill": 0x663e3b,
+    "title": 0xefe29e,
+    "text": 0xb7bb8e,
+    "misc": 0xba8249,
+};
+const COLORS_KODIAK = {
+    "bg": 0x59B8BF,
+    "fill": 0xE3E0E2,
+    "title": 0xF4E7DD,
+    "text": 0xF2B0A2,
+    "misc": 0xF6A889,
+};
+const COLORS_PORTLAND = {
+    "bg": 0x301D31,
+    "fill": 0xAC373E,
+    "title": 0xF37D61,
+    "text": 0xEE9651,
+    "misc": 0xA7C3B2,
+};
+let color_scheme = COLORS_GRAND_CANYON;
+
 const app = new PIXI.Application({
     width: WIDTH,
     height: HEIGHT,
-    backgroundColor: 0x3d232b,
+    backgroundColor: color_scheme.bg,
     resolution: window.devicePixelRatio || 1,
     antialias: true,
 });
@@ -126,7 +149,7 @@ class UI_Button {
         this._font_size = fs;
 
         this._text = new PIXI.Text(this._text_str,
-            {fontFamily:"monospace", fontSize:this._font_size, fill:0xb7bb8e, align:"center"});
+            {fontFamily:"monospace", fontSize:this._font_size, fill:color_scheme.text, align:"center"});
         this._text.position.set(this._x, this._y);
         this._text.anchor.set(0.5);
         ui.addChild(this._text);
@@ -179,17 +202,23 @@ class UI_Button {
     IsEnabled() { return this._enabled; }
 
     Draw() {
+        ui_graphics.lineStyle(0);
+        ui_graphics.beginFill(color_scheme.fill/2);
+        ui_graphics.drawRoundedRect(this._x - this._width/2 + 10, this._y - this._height/2 + 10,
+            this._width, this._height, this._corner_radius);
+        ui_graphics.endFill();
+
         if (this._enabled) {
             if (this._selected) {
-                ui_graphics.lineStyle(6, 0xefe29e, this._select_alpha);
+                ui_graphics.lineStyle(6, color_scheme.title, this._select_alpha);
             } else {
-                ui_graphics.lineStyle(4, 0xb7bb8e, 1);
+                ui_graphics.lineStyle(4, color_scheme.text, 1);
             }
         } else {
-            ui_graphics.lineStyle(6, 0xefe29e, this._select_alpha);
+            ui_graphics.lineStyle(6, color_scheme.title, this._select_alpha);
         }
 
-        ui_graphics.beginFill(0x663e3b);
+        ui_graphics.beginFill(color_scheme.fill);
         ui_graphics.drawRoundedRect(this._x - this._width/2, this._y - this._height/2, 
             this._width, this._height, this._corner_radius);
         ui_graphics.endFill();
@@ -279,7 +308,9 @@ class UI_MainMenu extends UI_Menu {
 
         this._title_str = "8Bomb";
         this._title_text = new PIXI.Text(this._title_str,
-            {fontFamily:"monospace", fontSize:100, fill:0xefe29e, align:"center", fontWeight:"bold"});
+            {fontFamily:"monospace", fontSize:100, fill:color_scheme.title, align:"center", fontWeight:"bold",
+            dropShadow:true, dropShadowAngle:Math.PI/4, dropShadowBlur:3, dropShadowColor:(color_scheme.bg & 0xfefefe) >> 1});
+            // TODO: fix drop shadow color
         this._title_text.position.set(WIDTH/2, 120);
         this._title_text.anchor.set(0.5);
         ui.addChild(this._title_text);
@@ -345,8 +376,8 @@ class UI_Settings extends UI_Menu {
         // Sound FX
         // Buttons idx 1 and 2 are for sfx.
         this._sound_text = new PIXI.Text("Sound FX:",
-            {fontFamily:"monospace", fontSize:40, fill:0xefe29e, align:"right"});
-        this._sound_text.position.set(280, 300);
+            {fontFamily:"monospace", fontSize:40, fill:color_scheme.title, align:"right"});
+        this._sound_text.position.set(300, 300);
         this._sound_text.anchor.set(1, 0.5);
         ui.addChild(this._sound_text);
 
@@ -361,8 +392,8 @@ class UI_Settings extends UI_Menu {
         // Music
         // Buttons idx 3 and 4 are for music.
         this._music_text = new PIXI.Text("Music:",
-            {fontFamily:"monospace", fontSize:40, fill:0xefe29e, align:"right"});
-        this._music_text.position.set(280, 400);
+            {fontFamily:"monospace", fontSize:40, fill:color_scheme.title, align:"right"});
+        this._music_text.position.set(300, 400);
         this._music_text.anchor.set(1, 0.5);
         ui.addChild(this._music_text);
 
@@ -377,10 +408,18 @@ class UI_Settings extends UI_Menu {
         // TODO: figure out how dropdown menus will work
         //   Add color scheme option.
         //   Implement different color schemes for 8Bomb.
+
+        // Color Scheme
+        // Dropdown 0 for color scheme.
+        this._colors_text = new PIXI.Text("Color Scheme:",
+            {fontFamily:"monospace", fontSize:40, fill:color_scheme.title, align:"right"});
+        this._colors_text.position.set(300, 500);
+        this._colors_text.anchor.set(1, 0.5);
+        ui.addChild(this._colors_text);
         
         this._title_str = "Settings";
         this._title_text = new PIXI.Text(this._title_str,
-            {fontFamily:"monospace", fontSize:100, fill:0xefe29e, align:"center", fontWeight:"bold"});
+            {fontFamily:"monospace", fontSize:100, fill:color_scheme.title, align:"center", fontWeight:"bold"});
         this._title_text.position.set(WIDTH/2, 120);
         this._title_text.anchor.set(0.5);
         ui.addChild(this._title_text);
@@ -393,6 +432,7 @@ class UI_Settings extends UI_Menu {
         super.Destroy();
         ui.removeChild(this._sound_text);
         ui.removeChild(this._music_text);
+        ui.removeChild(this._colors_text);
     }
 
     Key(k, d) {
@@ -457,7 +497,7 @@ class UI_About extends UI_Menu {
             
         this._title_str = "About";
         this._title_text = new PIXI.Text(this._title_str,
-            {fontFamily:"monospace", fontSize:100, fill:0xefe29e, align:"center", fontWeight:"bold"});
+            {fontFamily:"monospace", fontSize:100, fill:color_scheme.title, align:"center", fontWeight:"bold"});
         this._title_text.position.set(WIDTH/2, 120);
         this._title_text.anchor.set(0.5);
         ui.addChild(this._title_text);
@@ -468,7 +508,7 @@ WebSockets, pixi.js, pixi-viewport.js, matter.js, fmath.js, and stats.js.\n\n\
 Independent game development is a labor of love. Consider donating to support development \
 of new, exciting games :)";
         this._about_text = new PIXI.Text(this._about_str,
-            {fontFamily:"monospace", fontSize:30, fill:0xefe29e, align:"left",
+            {fontFamily:"monospace", fontSize:30, fill:color_scheme.title, align:"left",
             wordWrap:true, wordWrapWidth:WIDTH*0.8, lineHeight:35});
         this._about_text.position.set(WIDTH/2, 300);
         this._about_text.anchor.set(0.5, 0);
