@@ -225,9 +225,67 @@ class UI_Button {
     }
 }
 
+class UI_DropDown {
+    constructor(x, y, w, h, r, fs) {
+        this._x = x;
+        this._y = y;
+        this._width = w;
+        this._height = h;
+        this._corner_radius = r;
+        
+        this._options = [];
+        this._font_size = fs;
+
+        this._selected_option = -1;
+
+        this._bbox = new PIXI.Rectangle(this._x - this._width/2, this._y - this._height/2,
+            this._width, this._height);
+
+        this._expanded = false;
+    }
+
+    Contains(x, y) {
+        return this._bbox.contains(x, y);
+    }
+
+    Click(x, y) {
+        if (this.Contains(x, y)) {
+            this._expanded = true;
+
+            return true;
+        }
+
+        this._expanded = false;
+
+        return false;
+    }
+
+    Draw() {
+        ui_graphics.lineStyle(0);
+        ui_graphics.beginFill(color_scheme.fill/2);
+        ui_graphics.drawRoundedRect(this._x - this._width/2 + 10, this._y - this._height/2 + 10,
+            this._width, this._height, this._corner_radius);
+        ui_graphics.endFill();
+
+        if (this._expanded) {
+            ui_graphics.beginFill(color_scheme.fill);
+            ui_graphics.drawRoundedRect(this._x - this._width/2, this._y - this._height/2, 
+                this._width, this._height * 3, this._corner_radius);
+            ui_graphics.endFill();
+        } else {
+            ui_graphics.beginFill(color_scheme.fill);
+            ui_graphics.drawRoundedRect(this._x - this._width/2, this._y - this._height/2, 
+                this._width, this._height, this._corner_radius);
+            ui_graphics.endFill();
+        }
+    }
+}
+
 class UI_Menu {
     constructor() {
         this._buttons = [];
+        this._dropdowns = [];
+        this._dropdown_selected = -1;
         this._selected_button = 0;
         this._title_str = "NONE";
         this._KEY_TO_DIR = {"w":"N", "a":"W", "s":"S", "d":"E",
@@ -249,15 +307,25 @@ class UI_Menu {
     Key(k, d) {}
 
     MouseMove(x, y) {
+        if (this._dropdown_selected !== -1) { return; }
+
         for (let i = 0; i < this._buttons.length; i++) {
             if (this._buttons[i].Contains(x, y)) {
                 this._Select(i);
                 return;
             }
-        }
+        } 
     }
 
     MouseDown(x, y, b) {
+        this._dropdown_selected = -1;
+        for (let i = 0; i < this._dropdowns.length; i++) {
+            if (this._dropdowns[i].Click(x, y)) {
+                this._dropdown_selected = i;
+                return;
+            }
+        }
+
         if (this._buttons[this._selected_button].Contains(x, y)) {
             this._buttons[this._selected_button].Action();
         }
@@ -271,6 +339,9 @@ class UI_Menu {
     }
 
     Draw() {
+        for (let i = 0; i < this._dropdowns.length; i++) {
+            this._dropdowns[i].Draw();
+        }
         for (let i = 0; i < this._buttons.length; i++) {
             this._buttons[i].Draw();
         }
@@ -309,7 +380,7 @@ class UI_MainMenu extends UI_Menu {
         this._title_str = "8Bomb";
         this._title_text = new PIXI.Text(this._title_str,
             {fontFamily:"monospace", fontSize:100, fill:color_scheme.title, align:"center", fontWeight:"bold",
-            dropShadow:true, dropShadowAngle:Math.PI/4, dropShadowBlur:3, dropShadowColor:(color_scheme.bg & 0xfefefe) >> 1});
+            dropShadow:true, dropShadowAngle:Math.PI/4, dropShadowBlur:3, dropShadowColor:(color_scheme.title & 0xfefefe) >> 1});
             // TODO: fix drop shadow color
         this._title_text.position.set(WIDTH/2, 120);
         this._title_text.anchor.set(0.5);
@@ -416,10 +487,13 @@ class UI_Settings extends UI_Menu {
         this._colors_text.position.set(300, 500);
         this._colors_text.anchor.set(1, 0.5);
         ui.addChild(this._colors_text);
+
+        this._dropdowns.push(new UI_DropDown(550, 500, 350, 60, this._btn_rad, this._btn_fs));
         
         this._title_str = "Settings";
         this._title_text = new PIXI.Text(this._title_str,
-            {fontFamily:"monospace", fontSize:100, fill:color_scheme.title, align:"center", fontWeight:"bold"});
+            {fontFamily:"monospace", fontSize:100, fill:color_scheme.title, align:"center", fontWeight:"bold",
+            dropShadow:true, dropShadowAngle:Math.PI/4, dropShadowBlur:3, dropShadowColor:(color_scheme.title & 0xfefefe) >> 1});
         this._title_text.position.set(WIDTH/2, 120);
         this._title_text.anchor.set(0.5);
         ui.addChild(this._title_text);
@@ -497,7 +571,8 @@ class UI_About extends UI_Menu {
             
         this._title_str = "About";
         this._title_text = new PIXI.Text(this._title_str,
-            {fontFamily:"monospace", fontSize:100, fill:color_scheme.title, align:"center", fontWeight:"bold"});
+            {fontFamily:"monospace", fontSize:100, fill:color_scheme.title, align:"center", fontWeight:"bold",
+            dropShadow:true, dropShadowAngle:Math.PI/4, dropShadowBlur:3, dropShadowColor:(color_scheme.title & 0xfefefe) >> 1});
         this._title_text.position.set(WIDTH/2, 120);
         this._title_text.anchor.set(0.5);
         ui.addChild(this._title_text);
