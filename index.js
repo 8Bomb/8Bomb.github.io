@@ -101,6 +101,13 @@ let stage_actions = [];
 let playing_soundfx = true;
 let playing_music = true;
 
+let play_opts = {
+    map: "Kansas",
+    bomb_shape: "Dynamite",
+    gravity: 0.2,
+    bomb_factor: 0.3,
+};
+
 /* Matter.js stuff. TODO
 let Engine = Matter.Engine;
 let World = Matter.World;
@@ -131,6 +138,10 @@ function CommenceStageAction(a) {
                 ui_menu = new UI_Settings();
             } else if (tok[1] === "about") {
                 ui_menu = new UI_About();
+            } else if (tok[1] === "local-play") {
+                ui_menu = new UI_LocalPlay();
+            } else if (tok[1] === "online-play") {
+                ui_menu = new UI_OnlinePlay();
             }
         } else if (tok[0] === "soundfx") {
             console.log("TODO: turn sfx " + tok[1]);
@@ -152,6 +163,11 @@ function CommenceStageAction(a) {
             UpdateColorScheme(tok[1]);
         } else if (tok[0] === "radio") {
             ui_menu.ActivateRadioButton(parseInt(tok[1]), parseInt(tok[2]));
+        } else if (tok[0] === "play") {
+            console.log("TODO: enter game on play");
+        } else if (tok[0] === "map") {
+            console.log("setting map to " + tok[1]);
+            play_opts.map = tok[1];
         }
     }
 }
@@ -302,7 +318,7 @@ class UI_Button {
 }
 
 class UI_Menu {
-    constructor() {
+    constructor(s="NONE") {
         this._buttons = [];
         this._selected_button = 0;
         this._title_str = "NONE";
@@ -313,6 +329,15 @@ class UI_Menu {
         this._texts = [];
         this._open_submenu = -1;
         this._radio_buttons = [];
+
+        this._title_str = s;
+        this._title_text = new PIXI.Text(this._title_str,
+            {fontFamily:"monospace", fontSize:100, fill:color_scheme.title, align:"center", fontWeight:"bold",
+            dropShadow:true, dropShadowAngle:Math.PI/4, dropShadowBlur:3, dropShadowColor:(color_scheme.title & 0xfefefe) >> 1});
+        this._title_text.position.set(WIDTH/2, 120);
+        this._title_text.anchor.set(0.5);
+        ui.addChild(this._title_text);
+        this._texts.push(this._title_text);
         
         // TODO: mouse movement when submenu is open should not go beyond submenu.
         // TODO: make radio buttons more natural.
@@ -412,7 +437,9 @@ class UI_Menu {
         for (let i = 0; i < this._buttons.length; i++) {
             this._buttons[i].Destroy();
         }
-        ui.removeChild(this._title_text);
+        for (let i = 0; i < this._texts.length; i++) {
+            ui.removeChild(this._texts[i]);
+        }
     }
 
     Draw() {
@@ -424,7 +451,7 @@ class UI_Menu {
 
 class UI_MainMenu extends UI_Menu {
     constructor() {
-        super();
+        super("8Bomb");
 
         this._btn_width = 400;
         this._btn_height = 140;
@@ -451,16 +478,6 @@ class UI_MainMenu extends UI_Menu {
             this._btn_width, this._btn_height, this._btn_rad, "About", this._btn_fs,
             "open about"));
 
-        this._title_str = "8Bomb";
-        this._title_text = new PIXI.Text(this._title_str,
-            {fontFamily:"monospace", fontSize:100, fill:color_scheme.title, align:"center", fontWeight:"bold",
-            dropShadow:true, dropShadowAngle:Math.PI/4, dropShadowBlur:3, dropShadowColor:(color_scheme.title & 0xfefefe) >> 1});
-            // TODO: fix drop shadow color
-        this._title_text.position.set(WIDTH/2, 120);
-        this._title_text.anchor.set(0.5);
-        ui.addChild(this._title_text);
-        this._texts.push(this._title_str);
-
         this._selected_button = 0;
         this._buttons[this._selected_button].Select();
         this._round_selection = false;
@@ -476,9 +493,7 @@ class UI_MainMenu extends UI_Menu {
 
 class UI_Settings extends UI_Menu {
     constructor() {
-        super();
-        
-        this._buttons = [];
+        super("Settings");
 
         this._btn_width = 300;
         this._btn_height = 120;
@@ -540,29 +555,20 @@ class UI_Settings extends UI_Menu {
         ui.addChild(this._colors_text);
         this._texts.push(this._colors_text);
 
-        // button 5.
+        // button 5, dropdown 0.
         this._buttons.push(new UI_Button(
             550, 500, 350, 60, this._btn_rad, ""+color_scheme.name, this._btn_fs, "submenu open 0", true, true));
             
         // button 6, 7, and 8 (dropdown 0).
         this._buttons.push(new UI_Button(
-            550, 540, 350, 60, this._btn_rad, "Grand Canyon", this._btn_fs, 
+            550, 540, 350, 70, this._btn_rad, "Grand Canyon", this._btn_fs, 
             "color-scheme GRAND_CANYON; submenu close 0", false));
         this._buttons.push(new UI_Button(
-            550, 580, 350, 60, this._btn_rad, "Kodiak", this._btn_fs,
+            550, 580, 350, 70, this._btn_rad, "Kodiak", this._btn_fs,
             "color-scheme KODIAK; submenu close 0", false));
         this._buttons.push(new UI_Button(
             550, 620, 350, 60, this._btn_rad, "Portland", this._btn_fs,
             "color-scheme PORTLAND; submenu close 0", false));
-        
-        this._title_str = "Settings";
-        this._title_text = new PIXI.Text(this._title_str,
-            {fontFamily:"monospace", fontSize:100, fill:color_scheme.title, align:"center", fontWeight:"bold",
-            dropShadow:true, dropShadowAngle:Math.PI/4, dropShadowBlur:3, dropShadowColor:(color_scheme.title & 0xfefefe) >> 1});
-        this._title_text.position.set(WIDTH/2, 120);
-        this._title_text.anchor.set(0.5);
-        ui.addChild(this._title_text);
-        this._texts.push(this._title_text);
 
         this._selected_button = 0;
         this._buttons[this._selected_button].Select();
@@ -588,20 +594,11 @@ class UI_Settings extends UI_Menu {
             this._buttons[5].SetText(""+color_scheme.name);
         }
     }
-
-    Destroy() {
-        super.Destroy();
-        ui.removeChild(this._sound_text);
-        ui.removeChild(this._music_text);
-        ui.removeChild(this._colors_text);
-    }
 }
 
 class UI_About extends UI_Menu {
     constructor() {
-        super();
-        
-        this._buttons = [];
+        super("About");
 
         this._btn_width = 300;
         this._btn_height = 120;
@@ -619,14 +616,6 @@ class UI_About extends UI_Menu {
             WIDTH - this._horizontal_offset, this._vertical_offset, 
             this._btn_width, this._btn_height, this._btn_rad, "Donate", this._btn_fs,
             "donate"));
-            
-        this._title_str = "About";
-        this._title_text = new PIXI.Text(this._title_str,
-            {fontFamily:"monospace", fontSize:100, fill:color_scheme.title, align:"center", fontWeight:"bold",
-            dropShadow:true, dropShadowAngle:Math.PI/4, dropShadowBlur:3, dropShadowColor:(color_scheme.title & 0xfefefe) >> 1});
-        this._title_text.position.set(WIDTH/2, 120);
-        this._title_text.anchor.set(0.5);
-        ui.addChild(this._title_text);
         
         this._about_str = "No circles were harmed in the making of this game.\n\n\
 This game was designed and written by Sky Hoffert. It is written in javascript using \
@@ -639,6 +628,7 @@ of new, exciting games :)";
         this._about_text.position.set(WIDTH/2, 300);
         this._about_text.anchor.set(0.5, 0);
         ui.addChild(this._about_text);
+        this._texts.push(this._about_text);
 
         this._selected_button = 0;
         this._buttons[this._selected_button].Select();
@@ -648,10 +638,121 @@ of new, exciting games :)";
             1: {W:0}
         }
     }
+}
 
-    Destroy() {
-        super.Destroy();
-        ui.removeChild(this._about_text);
+class UI_LocalPlay extends UI_Menu {
+    constructor() {
+        super("Local Play");
+
+        this._btn_width = 300;
+        this._btn_height = 120;
+        this._btn_rad = 20;
+        this._btn_fs = 30;
+        this._padding = 40;
+        this._horizontal_offset = this._btn_width/2 + this._padding;
+        this._vertical_offset = 120;
+
+        // button 0 and 1: back and play.
+        this._buttons.push(new UI_Button(
+            this._horizontal_offset, this._vertical_offset, 
+            this._btn_width, this._btn_height, this._btn_rad, "Back", this._btn_fs,
+            "open main-menu"));
+        this._buttons.push(new UI_Button(
+            WIDTH - this._horizontal_offset, this._vertical_offset, 
+            this._btn_width, this._btn_height, this._btn_rad, "Play", this._btn_fs,
+            "play"));
+
+        // Map dropdown menu.
+        this._map_text = new PIXI.Text("Map:",
+            {fontFamily:"monospace", fontSize:40, fill:color_scheme.title, align:"right"});
+        this._map_text.position.set(350, 300);
+        this._map_text.anchor.set(1, 0.5);
+        ui.addChild(this._map_text);
+        this._texts.push(this._map_text);
+
+        // button 2, dropdown 0.
+        this._buttons.push(new UI_Button(
+            550, 300, 350, 60, this._btn_rad, ""+play_opts.map, this._btn_fs, "submenu open 0", true, true));
+            
+        // button 3 (dropdown 0).
+        this._buttons.push(new UI_Button(
+            550, 340, 350, 60, this._btn_rad, "Kansas", this._btn_fs, 
+            "map Kansas; submenu close 0", false));
+        
+        this._submenus.push([3]);
+
+        // Bomb shape dropdown menu.
+        this._bomb_text = new PIXI.Text("Bomb Shape:",
+            {fontFamily:"monospace", fontSize:40, fill:color_scheme.title, align:"right"});
+        this._bomb_text.position.set(350, 400);
+        this._bomb_text.anchor.set(1, 0.5);
+        ui.addChild(this._bomb_text);
+        this._texts.push(this._bomb_text);
+
+        // button 4, dropdown 1.
+        this._buttons.push(new UI_Button(
+            550, 400, 350, 60, this._btn_rad, ""+play_opts.bomb_shape, this._btn_fs, "submenu open 1", true, true));
+            
+        // button 5 (dropdown 1).
+        this._buttons.push(new UI_Button(
+            550, 440, 350, 60, this._btn_rad, "Dynamite", this._btn_fs, 
+            "bomb-shape Dynamite; submenu close 1", false));
+        
+        this._submenus.push([5]);
+        
+        this._selected_button = 0;
+        this._buttons[this._selected_button].Select();
+
+        this._button_transitions = {
+            0: {E:1, S:2},
+            1: {W:0, S:2},
+            2: {N:0, S:4},
+            3: {},
+            4: {N:2},
+            5: {},
+        }
+    }
+}
+
+class UI_OnlinePlay extends UI_Menu {
+    constructor() {
+        super("Online Play");
+
+        this._btn_width = 300;
+        this._btn_height = 120;
+        this._btn_rad = 20;
+        this._btn_fs = 30;
+        this._padding = 40;
+        this._horizontal_offset = this._btn_width/2 + this._padding;
+        this._vertical_offset = 120;
+
+        this._buttons.push(new UI_Button(
+            this._horizontal_offset, this._vertical_offset, 
+            this._btn_width, this._btn_height, this._btn_rad, "Back", this._btn_fs,
+            "open main-menu"));
+        this._buttons.push(new UI_Button(
+            WIDTH - this._horizontal_offset, this._vertical_offset, 
+            this._btn_width, this._btn_height, this._btn_rad, "Donate", this._btn_fs,
+            "donate"));
+        
+        this._selected_button = 0;
+        this._buttons[this._selected_button].Select();
+
+        this._button_transitions = {
+            0: {E:1},
+            1: {W:0}
+        }
+
+        this._about_str = "Online play is currently under development.\n\n\
+Please donate to support this effort!\n\n\
+We look forward to dodging bombs with you!";
+        this._about_text = new PIXI.Text(this._about_str,
+            {fontFamily:"monospace", fontSize:30, fill:color_scheme.text, align:"left",
+            wordWrap:true, wordWrapWidth:WIDTH*0.8, lineHeight:35});
+        this._about_text.position.set(WIDTH/2, 300);
+        this._about_text.anchor.set(0.5, 0);
+        ui.addChild(this._about_text);
+        this._texts.push(this._about_text);
     }
 }
 
