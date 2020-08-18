@@ -10,28 +10,33 @@
 const WIDTH = window.innerWidth;
 const HEIGHT = window.innerHeight;
 
-const COLORS_GRAND_CANYON = {
-    "bg": 0x3d232b,
-    "fill": 0x663e3b,
-    "title": 0xefe29e,
-    "text": 0xb7bb8e,
-    "misc": 0xba8249,
-};
-const COLORS_KODIAK = {
-    "bg": 0x59B8BF,
-    "fill": 0xE3E0E2,
-    "title": 0xF4E7DD,
-    "text": 0xF2B0A2,
-    "misc": 0xF6A889,
-};
-const COLORS_PORTLAND = {
-    "bg": 0x301D31,
-    "fill": 0xAC373E,
-    "title": 0xF37D61,
-    "text": 0xEE9651,
-    "misc": 0xA7C3B2,
-};
-let color_scheme = COLORS_GRAND_CANYON;
+const COLORS = {
+    GRAND_CANYON: {
+        "name": "Grand Canyon",
+        "bg": 0x3d232b,
+        "fill": 0x663e3b,
+        "title": 0xefe29e,
+        "text": 0xb7bb8e,
+        "misc": 0xba8249,
+    },
+    KODIAK: {
+        "name": "Kodiak",
+        "bg": 0x59B8BF,
+        "fill": 0xE3E0E2,
+        "title": 0xF4E7DD,
+        "text": 0xF2B0A2,
+        "misc": 0xF6A889,
+    },
+    PORTLAND: {
+        "name": "Portland",
+        "bg": 0x301D31,
+        "fill": 0xAC373E,
+        "title": 0xF37D61,
+        "text": 0xEE9651,
+        "misc": 0xA7C3B2,
+    },
+}
+let color_scheme = COLORS.GRAND_CANYON;
 
 const app = new PIXI.Application({
     width: WIDTH,
@@ -112,26 +117,48 @@ Engine.run(engine);
 // Functions //////////////////////////////////////////////////////////////////////////////////////
 
 function CommenceStageAction(a) {
-    const tok = a.split(" ");
-    if (tok[0] === "open") {
-        ui_menu.Destroy();
+    const lines = a.split(";");
 
-        if (tok[1] === "main-menu") {
-            ui_menu = new UI_MainMenu();
-        } else if (tok[1] === "settings") {
-            ui_menu = new UI_Settings();
-        } else if (tok[1] === "about") {
-            ui_menu = new UI_About();
+    for (let i = 0; i < lines.length; i++) {
+        const tok = lines[i].trim().split(" ");
+        console.log("" + tok);
+
+        if (tok[0] === "open") {
+            ui_menu.Destroy();
+
+            if (tok[1] === "main-menu") {
+                ui_menu = new UI_MainMenu();
+            } else if (tok[1] === "settings") {
+                ui_menu = new UI_Settings();
+            } else if (tok[1] === "about") {
+                ui_menu = new UI_About();
+            }
+        } else if (tok[0] === "soundfx") {
+            console.log("TODO: turn sfx " + tok[1]);
+            playing_soundfx = tok[1] === "on";
+        } else if (tok[0] === "music") {
+            console.log("TODO: turn music " + tok[1]);
+            playing_music = tok[1] === "on";
+        } else if (tok[0] === "donate") {
+            console.log("TODO: open donate page.");
+        } else if (tok[0] === "submenu") {
+            if (tok[1] === "open") {
+                console.log("opening submenu " + tok[2]);
+                ui_menu.OpenSubmenu(parseInt(tok[2]));
+            } else if (tok[1] === "close") {
+                console.log("closing submenu " + tok[2]);
+                ui_menu.CloseSubmenu(parseInt(tok[2]));
+            }
+        } else if (tok[0] === "color-scheme") {
+            UpdateColorScheme(tok[1]);
         }
-    } else if (tok[0] === "soundfx") {
-        console.log("TODO: turn sfx " + tok[1]);
-        playing_soundfx = tok[1] === "on";
-    } else if (tok[0] === "music") {
-        console.log("TODO: turn music " + tok[1]);
-        playing_music = tok[1] === "on";
-    } else if (tok[0] === "donate") {
-        console.log("TODO: open donate page.");
     }
+}
+
+function UpdateColorScheme(c) {
+    color_scheme = COLORS[c];
+    app.renderer.backgroundColor = color_scheme.bg;
+    ui_menu.UpdateColorScheme();
 }
 
 // Functions //////////////////////////////////////////////////////////////////////////////////////
@@ -139,7 +166,7 @@ function CommenceStageAction(a) {
 // Classes ////////////////////////////////////////////////////////////////////////////////////////
 
 class UI_Button {
-    constructor(x, y, w, h, r, t, fs, a) {
+    constructor(x, y, w, h, r, t, fs, a, act=true) {
         this._x = x;
         this._y = y;
         this._width = w;
@@ -163,6 +190,11 @@ class UI_Button {
             this._width, this._height);
 
         this._select_alpha = 0;
+
+        this._active = act;
+        if (!this._active) {
+            this._text.visible = false;
+        }
     }
 
     Tick(dT) {
@@ -183,6 +215,8 @@ class UI_Button {
     }
 
     Contains(x, y) {
+        if (!this._active) { return false; }
+
         return this._bbox.contains(x, y);
     }
     
@@ -200,8 +234,27 @@ class UI_Button {
     Enable() { this._enabled = true; }
     Disable() { this._enabled = false; }
     IsEnabled() { return this._enabled; }
+    Activate() {
+        this._text.visible = true;
+        this._active = true;
+    }
+    Deactivate() {
+        this._text.visible = false;
+        this._active = false;
+    }
+
+    UpdateColorScheme() {
+        this._text.style.fill = color_scheme.text;
+    }
+
+    SetText(t) {
+        this._text.text = t;
+        this._text.updateText();
+    }
 
     Draw() {
+        if (!this._active) { return; }
+
         ui_graphics.lineStyle(0);
         ui_graphics.beginFill(color_scheme.fill/2);
         ui_graphics.drawRoundedRect(this._x - this._width/2 + 10, this._y - this._height/2 + 10,
@@ -225,71 +278,19 @@ class UI_Button {
     }
 }
 
-class UI_DropDown {
-    constructor(x, y, w, h, r, fs) {
-        this._x = x;
-        this._y = y;
-        this._width = w;
-        this._height = h;
-        this._corner_radius = r;
-        
-        this._options = [];
-        this._font_size = fs;
-
-        this._selected_option = -1;
-
-        this._bbox = new PIXI.Rectangle(this._x - this._width/2, this._y - this._height/2,
-            this._width, this._height);
-
-        this._expanded = false;
-    }
-
-    Contains(x, y) {
-        return this._bbox.contains(x, y);
-    }
-
-    Click(x, y) {
-        if (this.Contains(x, y)) {
-            this._expanded = true;
-
-            return true;
-        }
-
-        this._expanded = false;
-
-        return false;
-    }
-
-    Draw() {
-        ui_graphics.lineStyle(0);
-        ui_graphics.beginFill(color_scheme.fill/2);
-        ui_graphics.drawRoundedRect(this._x - this._width/2 + 10, this._y - this._height/2 + 10,
-            this._width, this._height, this._corner_radius);
-        ui_graphics.endFill();
-
-        if (this._expanded) {
-            ui_graphics.beginFill(color_scheme.fill);
-            ui_graphics.drawRoundedRect(this._x - this._width/2, this._y - this._height/2, 
-                this._width, this._height * 3, this._corner_radius);
-            ui_graphics.endFill();
-        } else {
-            ui_graphics.beginFill(color_scheme.fill);
-            ui_graphics.drawRoundedRect(this._x - this._width/2, this._y - this._height/2, 
-                this._width, this._height, this._corner_radius);
-            ui_graphics.endFill();
-        }
-    }
-}
-
 class UI_Menu {
     constructor() {
         this._buttons = [];
-        this._dropdowns = [];
-        this._dropdown_selected = -1;
         this._selected_button = 0;
         this._title_str = "NONE";
         this._KEY_TO_DIR = {"w":"N", "a":"W", "s":"S", "d":"E",
             "ArrowUp":"N", "ArrowLeft":"W", "ArrowDown":"S", "ArrowRight":"E"};
+        this._button_transitions = {};
+        this._submenus = [];
+        this._texts = [];
+        
+        // TODO: mouse movement when submenu is open should not go beyond submenu.
+        // TODO: make radio buttons more natural.
     }
     
     _Select(i) {
@@ -304,11 +305,19 @@ class UI_Menu {
         }
     }
 
-    Key(k, d) {}
+    Key(k, d) {
+        if (!d) { return; }
+        if (k in this._KEY_TO_DIR) {
+            const dir = this._KEY_TO_DIR[k];
+            if (dir in this._button_transitions[this._selected_button]) {
+                this._Select(this._button_transitions[this._selected_button][dir]);
+            }
+        } else if (k === "Enter") {
+            this._buttons[this._selected_button].Action();
+        }
+    }
 
     MouseMove(x, y) {
-        if (this._dropdown_selected !== -1) { return; }
-
         for (let i = 0; i < this._buttons.length; i++) {
             if (this._buttons[i].Contains(x, y)) {
                 this._Select(i);
@@ -318,16 +327,31 @@ class UI_Menu {
     }
 
     MouseDown(x, y, b) {
-        this._dropdown_selected = -1;
-        for (let i = 0; i < this._dropdowns.length; i++) {
-            if (this._dropdowns[i].Click(x, y)) {
-                this._dropdown_selected = i;
-                return;
-            }
-        }
-
         if (this._buttons[this._selected_button].Contains(x, y)) {
             this._buttons[this._selected_button].Action();
+        }
+    }
+
+    OpenSubmenu(idx) {
+        for (let i = 0; i < this._submenus[idx].length; i++) {
+            this._buttons[this._submenus[idx][i]].Activate();
+        }
+        this._Select(this._submenus[idx][0]);
+    }
+
+    CloseSubmenu(idx) {
+        for (let i = 0; i < this._submenus[idx].length; i++) {
+            this._buttons[this._submenus[idx][i]].Deactivate();
+        }
+        this._Select(this._submenus[idx][0] - 1);
+    }
+
+    UpdateColorScheme() {
+        for (let i = 0; i < this._buttons.length; i++) {
+            this._buttons[i].UpdateColorScheme();
+        }
+        for (let i = 0; i < this._texts.length; i++) {
+            this._texts[i].style.fill = color_scheme.title;
         }
     }
 
@@ -339,9 +363,6 @@ class UI_Menu {
     }
 
     Draw() {
-        for (let i = 0; i < this._dropdowns.length; i++) {
-            this._dropdowns[i].Draw();
-        }
         for (let i = 0; i < this._buttons.length; i++) {
             this._buttons[i].Draw();
         }
@@ -385,43 +406,18 @@ class UI_MainMenu extends UI_Menu {
         this._title_text.position.set(WIDTH/2, 120);
         this._title_text.anchor.set(0.5);
         ui.addChild(this._title_text);
+        this._texts.push(this._title_str);
 
         this._selected_button = 0;
         this._buttons[this._selected_button].Select();
         this._round_selection = false;
-    }
 
-    Key(k, d) {
-        if (k in this._KEY_TO_DIR) {
-            const dir = this._KEY_TO_DIR[k];
-            if (d) {
-                this._MoveSelection(dir);
-            }
-        } else if (k === "Enter") {
-            this._buttons[this._selected_button].Action();
-        }
-    }
-
-    _MoveSelect(n) {
-        this._buttons[this._selected_button].Deselect();
-        this._selected_button += n;
-        this._buttons[this._selected_button].Select();
-    }
-
-    _MoveSelection(dir) {
-        const cs = this._selected_button;
-        let n = 0;
-        if (dir === "N") {
-            n = cs === 0 || cs === 2 ? 0 : -1;
-        } else if (dir === "S") {
-            n = cs === 1 || cs === 3 ? 0 : 1;
-        } else if (dir === "E") {
-            n = cs === 2 || cs === 3 ? 0 : 2;
-        } else if (dir === "W") {
-            n = cs === 0 || cs === 1 ? 0 : -2;
-        }
-
-        this._MoveSelect(n);
+        this._button_transitions = {
+            0: {E:2, S:1},
+            1: {E:3, N:0},
+            2: {W:0, S:3},
+            3: {W:1, N:2},
+        };
     }
 }
 
@@ -448,9 +444,10 @@ class UI_Settings extends UI_Menu {
         // Buttons idx 1 and 2 are for sfx.
         this._sound_text = new PIXI.Text("Sound FX:",
             {fontFamily:"monospace", fontSize:40, fill:color_scheme.title, align:"right"});
-        this._sound_text.position.set(300, 300);
+        this._sound_text.position.set(350, 300);
         this._sound_text.anchor.set(1, 0.5);
         ui.addChild(this._sound_text);
+        this._texts.push(this._sound_text);
 
         this._buttons.push(new UI_Button(
             450, 300, 150, 60, this._btn_rad, "On", this._btn_fs,
@@ -464,9 +461,10 @@ class UI_Settings extends UI_Menu {
         // Buttons idx 3 and 4 are for music.
         this._music_text = new PIXI.Text("Music:",
             {fontFamily:"monospace", fontSize:40, fill:color_scheme.title, align:"right"});
-        this._music_text.position.set(300, 400);
+        this._music_text.position.set(350, 400);
         this._music_text.anchor.set(1, 0.5);
         ui.addChild(this._music_text);
+        this._texts.push(this._music_text);
 
         this._buttons.push(new UI_Button(
             450, 400, 150, 60, this._btn_rad, "On", this._btn_fs,
@@ -476,19 +474,26 @@ class UI_Settings extends UI_Menu {
             650, 400, 150, 60, this._btn_rad, "Off", this._btn_fs,
             "music off"));
 
-        // TODO: figure out how dropdown menus will work
-        //   Add color scheme option.
-        //   Implement different color schemes for 8Bomb.
-
         // Color Scheme
-        // Dropdown 0 for color scheme.
         this._colors_text = new PIXI.Text("Color Scheme:",
             {fontFamily:"monospace", fontSize:40, fill:color_scheme.title, align:"right"});
-        this._colors_text.position.set(300, 500);
+        this._colors_text.position.set(350, 500);
         this._colors_text.anchor.set(1, 0.5);
         ui.addChild(this._colors_text);
+        this._texts.push(this._colors_text);
 
-        this._dropdowns.push(new UI_DropDown(550, 500, 350, 60, this._btn_rad, this._btn_fs));
+        this._buttons.push(new UI_Button(
+            550, 500, 350, 60, this._btn_rad, ""+color_scheme.name, this._btn_fs, "submenu open 0"));
+            
+        this._buttons.push(new UI_Button(
+            550, 540, 350, 60, this._btn_rad, "Grand Canyon", this._btn_fs, 
+            "color-scheme GRAND_CANYON; submenu close 0", false));
+        this._buttons.push(new UI_Button(
+            550, 580, 350, 60, this._btn_rad, "Kodiak", this._btn_fs,
+            "color-scheme KODIAK; submenu close 0", false));
+        this._buttons.push(new UI_Button(
+            550, 620, 350, 60, this._btn_rad, "Portland", this._btn_fs,
+            "color-scheme PORTLAND; submenu close 0", false));
         
         this._title_str = "Settings";
         this._title_text = new PIXI.Text(this._title_str,
@@ -497,9 +502,31 @@ class UI_Settings extends UI_Menu {
         this._title_text.position.set(WIDTH/2, 120);
         this._title_text.anchor.set(0.5);
         ui.addChild(this._title_text);
+        this._texts.push(this._title_text);
 
         this._selected_button = 0;
         this._buttons[this._selected_button].Select();
+
+        this._button_transitions = {
+            0: {S:1},
+            1: {N:0, E:2, S:3},
+            2: {N:0, W:1, S:4},
+            3: {N:1, E:4, S:5},
+            4: {N:2, W:3, S:5},
+            5: {N:3},
+            6: {S:7},
+            7: {N:6, S:8},
+            8: {N:7},
+        };
+
+        this._submenus.push([6, 7, 8]);
+    }
+
+    CloseSubmenu(idx) {
+        super.CloseSubmenu(idx);
+        if (idx === 0) {
+            this._buttons[5].SetText(""+color_scheme.name);
+        }
     }
 
     Destroy() {
@@ -508,24 +535,11 @@ class UI_Settings extends UI_Menu {
         ui.removeChild(this._music_text);
         ui.removeChild(this._colors_text);
     }
-
-    Key(k, d) {
-        if (k in this._KEY_TO_DIR) {
-            // TODO: Add key control for navigating buttons.
-            // TODO: Pressing enter changes menu TWICE.
-            return;
-            const dir = this._KEY_TO_DIR[k];
-            if (d) {
-                this._MoveSelection(dir);
-            }
-        } else if (k === "Enter") {
-            this._buttons[this._selected_button].Action();
-        }
-    }
     
     MouseDown(x, y, b) {
         super.MouseDown(x,y,b);
 
+        // TODO: make radio buttons better
         // Sound FX
         if (this._selected_button === 1 && this._buttons[1].Contains(x, y)) {
             this._buttons[1].Enable();
@@ -591,30 +605,16 @@ of new, exciting games :)";
 
         this._selected_button = 0;
         this._buttons[this._selected_button].Select();
+
+        this._button_transitions = {
+            0: {E:1},
+            1: {W:0}
+        }
     }
 
     Destroy() {
         super.Destroy();
         ui.removeChild(this._about_text);
-    }
-    
-    Key(k, d) {
-        if (k in this._KEY_TO_DIR) {
-            const dir = this._KEY_TO_DIR[k];
-            if (d) {
-                this._MoveSelection(dir);
-            }
-        } else if (k === "Enter") {
-            this._buttons[this._selected_button].Action();
-        }
-    }
-
-    _MoveSelection(dir) {
-        if (dir === "E") {
-            this._Select(1);
-        } else if (dir === "W") {
-            this._Select(0);
-        }
     }
 }
 
