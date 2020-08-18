@@ -15,9 +15,9 @@ const COLORS = {
         "name": "Grand Canyon",
         "bg": 0x3d232b,
         "fill": 0x663e3b,
-        "title": 0xefe29e,
-        "text": 0xb7bb8e,
-        "misc": 0xba8249,
+        "title": 0xd28b3d,
+        "text": 0xdac376,
+        "misc": 0xb1b637,
     },
     KODIAK: {
         "name": "Kodiak",
@@ -121,7 +121,6 @@ function CommenceStageAction(a) {
 
     for (let i = 0; i < lines.length; i++) {
         const tok = lines[i].trim().split(" ");
-        console.log("" + tok);
 
         if (tok[0] === "open") {
             ui_menu.Destroy();
@@ -151,6 +150,8 @@ function CommenceStageAction(a) {
             }
         } else if (tok[0] === "color-scheme") {
             UpdateColorScheme(tok[1]);
+        } else if (tok[0] === "radio") {
+            ui_menu.ActivateRadioButton(parseInt(tok[1]), parseInt(tok[2]));
         }
     }
 }
@@ -161,12 +162,16 @@ function UpdateColorScheme(c) {
     ui_menu.UpdateColorScheme();
 }
 
+function DarkenColor(c) {
+    return (c & 0xfefefe) >> 1;
+}
+
 // Functions //////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Classes ////////////////////////////////////////////////////////////////////////////////////////
 
 class UI_Button {
-    constructor(x, y, w, h, r, t, fs, a, act=true) {
+    constructor(x, y, w, h, r, t, fs, a, act=true, dd=false) {
         this._x = x;
         this._y = y;
         this._width = w;
@@ -194,6 +199,17 @@ class UI_Button {
         this._active = act;
         if (!this._active) {
             this._text.visible = false;
+        }
+
+        this._has_dropdown = dd;
+
+        if (this._has_dropdown) {
+            this._dd_pts = [
+                this._x + this._width/2 - 30, this._y - 10,
+                this._x + this._width/2 - 10, this._y - 10,
+                this._x + this._width/2 - 20, this._y + 10,
+            ];
+            this._dd_poly = new PIXI.Polygon(this._dd_pts);
         }
     }
 
@@ -275,6 +291,13 @@ class UI_Button {
         ui_graphics.drawRoundedRect(this._x - this._width/2, this._y - this._height/2, 
             this._width, this._height, this._corner_radius);
         ui_graphics.endFill();
+
+        if (this._has_dropdown) {
+            ui_graphics.lineStyle(0);
+            ui_graphics.beginFill(color_scheme.text);
+            ui_graphics.drawPolygon(this._dd_poly);
+            ui_graphics.endFill();
+        }
     }
 }
 
@@ -288,6 +311,8 @@ class UI_Menu {
         this._button_transitions = {};
         this._submenus = [];
         this._texts = [];
+        this._open_submenu = -1;
+        this._radio_buttons = [];
         
         // TODO: mouse movement when submenu is open should not go beyond submenu.
         // TODO: make radio buttons more natural.
@@ -318,6 +343,16 @@ class UI_Menu {
     }
 
     MouseMove(x, y) {
+        if (this._open_submenu !== -1) {
+            for (let i = 0; i < this._submenus[this._open_submenu].length; i++) {
+                if (this._buttons[this._submenus[this._open_submenu][i]].Contains(x, y)) {
+                    this._Select(this._submenus[this._open_submenu][i]);
+                    return;
+                }
+            }
+            return;
+        }
+
         for (let i = 0; i < this._buttons.length; i++) {
             if (this._buttons[i].Contains(x, y)) {
                 this._Select(i);
@@ -329,6 +364,10 @@ class UI_Menu {
     MouseDown(x, y, b) {
         if (this._buttons[this._selected_button].Contains(x, y)) {
             this._buttons[this._selected_button].Action();
+        } else {
+            if (this._open_submenu !== -1) {
+                this.CloseSubmenu(this._open_submenu);
+            }
         }
     }
 
@@ -337,6 +376,7 @@ class UI_Menu {
             this._buttons[this._submenus[idx][i]].Activate();
         }
         this._Select(this._submenus[idx][0]);
+        this._open_submenu = idx;
     }
 
     CloseSubmenu(idx) {
@@ -344,6 +384,7 @@ class UI_Menu {
             this._buttons[this._submenus[idx][i]].Deactivate();
         }
         this._Select(this._submenus[idx][0] - 1);
+        this._open_submenu = -1;
     }
 
     UpdateColorScheme() {
@@ -352,6 +393,18 @@ class UI_Menu {
         }
         for (let i = 0; i < this._texts.length; i++) {
             this._texts[i].style.fill = color_scheme.title;
+            this._texts[i].style.dropShadowColor = DarkenColor(color_scheme.title);
+        }
+    }
+
+    ActivateRadioButton(ri, bi) {
+        const rbi = this._radio_buttons[ri];
+        for (let i = 0; i < rbi.length; i++) {
+            if (i === bi) {
+                this._buttons[rbi[i]].Enable();
+            } else {
+                this._buttons[rbi[i]].Disable();
+            }
         }
     }
 
@@ -435,6 +488,7 @@ class UI_Settings extends UI_Menu {
         this._horizontal_offset = this._btn_width/2 + this._padding;
         this._vertical_offset = 120;
 
+        // button 0.
         this._buttons.push(new UI_Button(
             this._horizontal_offset, this._vertical_offset, 
             this._btn_width, this._btn_height, this._btn_rad, "Back", this._btn_fs,
@@ -449,13 +503,15 @@ class UI_Settings extends UI_Menu {
         ui.addChild(this._sound_text);
         this._texts.push(this._sound_text);
 
+        // button 1 and 2 (radio 0).
+        this._radio_buttons.push([1, 2]);
         this._buttons.push(new UI_Button(
             450, 300, 150, 60, this._btn_rad, "On", this._btn_fs,
-            "soundfx on"));
+            "soundfx on; radio 0 0"));
         this._buttons[1].Enable();
         this._buttons.push(new UI_Button(
             650, 300, 150, 60, this._btn_rad, "Off", this._btn_fs,
-            "soundfx off"));
+            "soundfx off; radio 0 1"));
         
         // Music
         // Buttons idx 3 and 4 are for music.
@@ -466,13 +522,15 @@ class UI_Settings extends UI_Menu {
         ui.addChild(this._music_text);
         this._texts.push(this._music_text);
 
+        // button 3 and 4 (radio 1).
+        this._radio_buttons.push([3, 4]);
         this._buttons.push(new UI_Button(
             450, 400, 150, 60, this._btn_rad, "On", this._btn_fs,
-            "music on"));
+            "music on; radio 1 0"));
         this._buttons[3].Enable();
         this._buttons.push(new UI_Button(
             650, 400, 150, 60, this._btn_rad, "Off", this._btn_fs,
-            "music off"));
+            "music off; radio 1 1"));
 
         // Color Scheme
         this._colors_text = new PIXI.Text("Color Scheme:",
@@ -482,9 +540,11 @@ class UI_Settings extends UI_Menu {
         ui.addChild(this._colors_text);
         this._texts.push(this._colors_text);
 
+        // button 5.
         this._buttons.push(new UI_Button(
-            550, 500, 350, 60, this._btn_rad, ""+color_scheme.name, this._btn_fs, "submenu open 0"));
+            550, 500, 350, 60, this._btn_rad, ""+color_scheme.name, this._btn_fs, "submenu open 0", true, true));
             
+        // button 6, 7, and 8 (dropdown 0).
         this._buttons.push(new UI_Button(
             550, 540, 350, 60, this._btn_rad, "Grand Canyon", this._btn_fs, 
             "color-scheme GRAND_CANYON; submenu close 0", false));
@@ -513,7 +573,7 @@ class UI_Settings extends UI_Menu {
             2: {N:0, W:1, S:4},
             3: {N:1, E:4, S:5},
             4: {N:2, W:3, S:5},
-            5: {N:3},
+            5: {N:3}, // Dropdown 0
             6: {S:7},
             7: {N:6, S:8},
             8: {N:7},
@@ -534,29 +594,6 @@ class UI_Settings extends UI_Menu {
         ui.removeChild(this._sound_text);
         ui.removeChild(this._music_text);
         ui.removeChild(this._colors_text);
-    }
-    
-    MouseDown(x, y, b) {
-        super.MouseDown(x,y,b);
-
-        // TODO: make radio buttons better
-        // Sound FX
-        if (this._selected_button === 1 && this._buttons[1].Contains(x, y)) {
-            this._buttons[1].Enable();
-            this._buttons[2].Disable();
-        } else if (this._selected_button === 2 && this._buttons[2].Contains(x, y)) {
-            this._buttons[1].Disable();
-            this._buttons[2].Enable();
-        }
-
-        // Music
-        if (this._selected_button === 3 && this._buttons[3].Contains(x, y)) {
-            this._buttons[3].Enable();
-            this._buttons[4].Disable();
-        } else if (this._selected_button === 4 && this._buttons[4].Contains(x, y)) {
-            this._buttons[3].Disable();
-            this._buttons[4].Enable();
-        }
     }
 }
 
@@ -597,7 +634,7 @@ WebSockets, pixi.js, pixi-viewport.js, matter.js, fmath.js, and stats.js.\n\n\
 Independent game development is a labor of love. Consider donating to support development \
 of new, exciting games :)";
         this._about_text = new PIXI.Text(this._about_str,
-            {fontFamily:"monospace", fontSize:30, fill:color_scheme.title, align:"left",
+            {fontFamily:"monospace", fontSize:30, fill:color_scheme.text, align:"left",
             wordWrap:true, wordWrapWidth:WIDTH*0.8, lineHeight:35});
         this._about_text.position.set(WIDTH/2, 300);
         this._about_text.anchor.set(0.5, 0);
