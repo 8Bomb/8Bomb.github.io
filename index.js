@@ -104,8 +104,8 @@ let playing_music = true;
 let play_opts = {
     map: "Kansas",
     bomb_shape: "Dynamite",
-    gravity: 0.2,
-    bomb_factor: 0.3,
+    gravity: 1,
+    bomb_factor: 1,
 };
 
 /* Matter.js stuff. TODO
@@ -168,6 +168,24 @@ function CommenceStageAction(a) {
         } else if (tok[0] === "map") {
             console.log("setting map to " + tok[1]);
             play_opts.map = tok[1];
+        } else if (tok[0] === "gravity") {
+            console.log("setting gravity to " + tok[1]);
+            if (tok[1] === "low") {
+                play_opts.gravity = 0;
+            } else if (tok[1] === "medium") {
+                play_opts.gravity = 1;
+            } else if (tok[1] === "high") {
+                play_opts.gravity = 2;
+            }
+        } else if (tok[0] === "bomb-factor") {
+            console.log("setting bomb factor to " + tok[1]);
+            if (tok[1] === "low") {
+                play_opts.bomb_factor = 0;
+            } else if (tok[1] === "medium") {
+                play_opts.bomb_factor = 1;
+            } else if (tok[1] === "high") {
+                play_opts.bomb_factor = 2;
+            }
         }
     }
 }
@@ -338,9 +356,6 @@ class UI_Menu {
         this._title_text.anchor.set(0.5);
         ui.addChild(this._title_text);
         this._texts.push(this._title_text);
-        
-        // TODO: mouse movement when submenu is open should not go beyond submenu.
-        // TODO: make radio buttons more natural.
     }
     
     _Select(i) {
@@ -699,6 +714,48 @@ class UI_LocalPlay extends UI_Menu {
             "bomb-shape Dynamite; submenu close 1", false));
         
         this._submenus.push([5]);
+
+        // Gravity selection.
+        this._grav_text = new PIXI.Text("Gravity:",
+            {fontFamily:"monospace", fontSize:40, fill:color_scheme.title, align:"right"});
+        this._grav_text.position.set(350, 500);
+        this._grav_text.anchor.set(1, 0.5);
+        ui.addChild(this._grav_text);
+        this._texts.push(this._grav_text);
+
+        // button 6, 7, and 8 (radio 0).
+        this._radio_buttons.push([6, 7, 8]);
+        this._buttons.push(new UI_Button(
+            425, 500, 100, 60, this._btn_rad, "Low", this._btn_fs - 6,
+            "gravity low; radio 0 0"));
+        this._buttons.push(new UI_Button(
+            550, 500, 100, 60, this._btn_rad, "Medium", this._btn_fs - 6,
+            "gravity medium; radio 0 1"));
+        this._buttons.push(new UI_Button(
+            675, 500, 100, 60, this._btn_rad, "High", this._btn_fs - 6,
+            "gravity high; radio 0 2"));
+        this._buttons[play_opts.gravity + 6].Enable();
+            
+        // Bomb factor selection.
+        this._factor_text = new PIXI.Text("Bomb Factor:",
+            {fontFamily:"monospace", fontSize:40, fill:color_scheme.title, align:"right"});
+        this._factor_text.position.set(350, 600);
+        this._factor_text.anchor.set(1, 0.5);
+        ui.addChild(this._factor_text);
+        this._texts.push(this._factor_text);
+
+        // button 9, 10, 11 (radio 1).
+        this._radio_buttons.push([9, 10, 11]);
+        this._buttons.push(new UI_Button(
+            425, 600, 100, 60, this._btn_rad, "Low", this._btn_fs - 6,
+            "bomb-factor low; radio 1 0"));
+        this._buttons.push(new UI_Button(
+            550, 600, 100, 60, this._btn_rad, "Medium", this._btn_fs - 6,
+            "bomb-factor medium; radio 1 1"));
+        this._buttons.push(new UI_Button(
+            675, 600, 100, 60, this._btn_rad, "High", this._btn_fs - 6,
+            "bomb-factor high; radio 1 2"));
+        this._buttons[play_opts.bomb_factor + 9].Enable();
         
         this._selected_button = 0;
         this._buttons[this._selected_button].Select();
@@ -708,8 +765,14 @@ class UI_LocalPlay extends UI_Menu {
             1: {W:0, S:2},
             2: {N:0, S:4},
             3: {},
-            4: {N:2},
+            4: {N:2, S:7},
             5: {},
+            6: {N:4, E:7, S:9},
+            7: {N:4, W:6, E:8, S:10},
+            8: {N:4, W:7, S:11},
+            9: {N:6, E:10},
+            10: {N:7, W:9, E:11},
+            11: {N:8, W:10},
         }
     }
 }
@@ -780,6 +843,10 @@ document.addEventListener("mousemove", function (evt) {
 
 document.addEventListener("mousedown", function (evt) {
     ui_menu.MouseDown(evt.x, evt.y, evt.button);
+}, false);
+
+document.addEventListener("mouseup", function (evt) {
+    //ui_menu.MouseUp(evt.x, evt.y, evt.button);
 }, false);
 
 // Events /////////////////////////////////////////////////////////////////////////////////////////
