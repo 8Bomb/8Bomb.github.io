@@ -172,6 +172,9 @@ function CommenceStageAction(a) {
             } else if (tok[1] === "load") {
                 ui_menu.Destroy();
                 ui_menu = new Load_LocalPlay();
+            } else if (tok[1] === "start") {
+                ui_menu.Destroy();
+                ui_menu = new LocalPlay();
             }
         } else if (tok[0] === "map") {
             console.log("setting map to " + tok[1]);
