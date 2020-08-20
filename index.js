@@ -62,6 +62,7 @@ function Tick(dT) {
 
     // Drawing
     ui_graphics.clear();
+    ui_graphics_front.clear();
     ui_menu.Draw();
 }
 
@@ -95,6 +96,8 @@ const stage_graphics = new PIXI.Graphics();
 stage.addChild(stage_graphics);
 const ui_graphics = new PIXI.Graphics();
 ui.addChild(ui_graphics);
+const ui_graphics_front = new PIXI.Graphics();
+app.stage.addChild(ui_graphics_front);
 
 let stage_actions = [];
 
@@ -164,7 +167,12 @@ function CommenceStageAction(a) {
         } else if (tok[0] === "radio") {
             ui_menu.ActivateRadioButton(parseInt(tok[1]), parseInt(tok[2]));
         } else if (tok[0] === "play") {
-            console.log("TODO: enter game on play");
+            if (tok[1] === "fade") {
+                ui_menu.FadeOut("play load");
+            } else if (tok[1] === "load") {
+                ui_menu.Destroy();
+                ui_menu = new Load_LocalPlay();
+            }
         } else if (tok[0] === "map") {
             console.log("setting map to " + tok[1]);
             play_opts.map = tok[1];
@@ -356,6 +364,10 @@ class UI_Menu {
         this._title_text.anchor.set(0.5);
         ui.addChild(this._title_text);
         this._texts.push(this._title_text);
+
+        this._fade_act = "";
+        this._fading = false;
+        this._fade_pc = 0;
     }
     
     _Select(i) {
@@ -368,10 +380,19 @@ class UI_Menu {
         for (let i = 0; i < this._buttons.length; i++) {
             this._buttons[i].Tick(dT);
         }
+
+        if (this._fade_pc < 1) {
+            this._fade_pc += 0.01;
+        } else {
+            this._fade_pc = 1;
+            stage_actions.push(this._fade_act);
+        }
     }
 
     Key(k, d) {
         if (!d) { return; }
+        if (this._fading) { return; }
+
         if (k in this._KEY_TO_DIR) {
             const dir = this._KEY_TO_DIR[k];
             if (dir in this._button_transitions[this._selected_button]) {
@@ -383,6 +404,8 @@ class UI_Menu {
     }
 
     MouseMove(x, y) {
+        if (this._fading) { return; }
+
         if (this._open_submenu !== -1) {
             for (let i = 0; i < this._submenus[this._open_submenu].length; i++) {
                 if (this._buttons[this._submenus[this._open_submenu][i]].Contains(x, y)) {
@@ -402,6 +425,8 @@ class UI_Menu {
     }
 
     MouseDown(x, y, b) {
+        if (this._fading) { return; }
+
         if (this._buttons[this._selected_button].Contains(x, y)) {
             this._buttons[this._selected_button].Action();
         } else {
@@ -448,6 +473,11 @@ class UI_Menu {
         }
     }
 
+    FadeOut(act) {
+        this._fading = true;
+        this._fade_act = act;
+    }
+
     Destroy() {
         for (let i = 0; i < this._buttons.length; i++) {
             this._buttons[i].Destroy();
@@ -460,6 +490,12 @@ class UI_Menu {
     Draw() {
         for (let i = 0; i < this._buttons.length; i++) {
             this._buttons[i].Draw();
+        }
+
+        if (this._fading) {
+            ui_graphics_front.beginFill(0x000000, this._fade_pc);
+            ui_graphics_front.drawRect(0, 0, WIDTH, HEIGHT);
+            ui_graphics_front.endFill();
         }
     }
 }
@@ -675,7 +711,7 @@ class UI_LocalPlay extends UI_Menu {
         this._buttons.push(new UI_Button(
             WIDTH - this._horizontal_offset, this._vertical_offset, 
             this._btn_width, this._btn_height, this._btn_rad, "Play", this._btn_fs,
-            "play"));
+            "play fade"));
 
         // Map dropdown menu.
         this._map_text = new PIXI.Text("Map:",
