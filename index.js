@@ -13,11 +13,11 @@ const HEIGHT = window.innerHeight;
 const COLORS = {
     GRAND_CANYON: {
         "name": "Grand Canyon",
-        "bg": 0x3d232b,
-        "fill": 0x663e3b,
-        "title": 0xd28b3d,
-        "text": 0xdac376,
-        "misc": 0xb1b637,
+        "bg": 0x3D232B,
+        "fill": 0x663E3B,
+        "title": 0xD28B3D,
+        "text": 0xDAC376,
+        "misc": 0xB1B637,
     },
     KODIAK: {
         "name": "Kodiak",
@@ -35,6 +35,21 @@ const COLORS = {
         "text": 0xEE9651,
         "misc": 0xA7C3B2,
     },
+};
+const MAP_COLORS = {
+    Kansas: {
+        "name": "Kansas",
+        "bg": 0x176B7D,
+        "tbd1": 0x389276,
+        "ground": 0x9D8E3A,
+        "tbd3": 0xCE8F36,
+        "magma": 0xF05B52,
+    }
+}
+const BOMB_COLORS = {
+    Dynamite: {
+        "main": 0xF05B52,
+    }
 }
 let color_scheme = COLORS.GRAND_CANYON;
 
@@ -91,6 +106,7 @@ app.stage.addChild(ui);
 // Stage elements go in stage - stage_graphics is a child.
 const stage = new PIXI.Container();
 viewport.addChild(stage);
+viewport.moveCenter(0, 0);
 
 const stage_graphics = new PIXI.Graphics();
 stage.addChild(stage_graphics);
@@ -98,6 +114,8 @@ const ui_graphics = new PIXI.Graphics();
 ui.addChild(ui_graphics);
 const ui_graphics_front = new PIXI.Graphics();
 app.stage.addChild(ui_graphics_front);
+
+let keys = {w:false,a:false,s:false,d:false};
 
 let stage_actions = [];
 
@@ -111,16 +129,19 @@ let play_opts = {
     bomb_factor: 1,
 };
 
-/* Matter.js stuff. TODO
+// DEBUG
+//let loading_stage = null;
+
+// Matter.js stuff
 let Engine = Matter.Engine;
 let World = Matter.World;
 let Bodies = Matter.Bodies;
 let engine = Engine.create();
 
 engine.world.gravity.y = 0.2;
+engine.enabled = false;
 
-Engine.run(engine);
-*/
+//Engine.run(engine);
 
 // Setup //////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -172,9 +193,13 @@ function CommenceStageAction(a) {
             } else if (tok[1] === "load") {
                 ui_menu.Destroy();
                 ui_menu = new Load_LocalPlay();
+                loading_stage = new LocalPlay();
             } else if (tok[1] === "start") {
                 ui_menu.Destroy();
-                ui_menu = new LocalPlay();
+                delete ui_menu;
+                ui_menu = loading_stage;
+                ui_menu.Loaded(true);
+                loading_stage = null;
             }
         } else if (tok[0] === "map") {
             console.log("setting map to " + tok[1]);
@@ -368,7 +393,7 @@ class UI_Menu {
         ui.addChild(this._title_text);
         this._texts.push(this._title_text);
 
-        this._fade_act = "";
+        this._fade_act = "none";
         this._fading = false;
         this._fade_pc = 0;
     }
@@ -384,11 +409,13 @@ class UI_Menu {
             this._buttons[i].Tick(dT);
         }
 
-        if (this._fade_pc < 1) {
-            this._fade_pc += 0.01;
-        } else {
-            this._fade_pc = 1;
-            stage_actions.push(this._fade_act);
+        if (this._fading) {
+            if (this._fade_pc < 1) {
+                this._fade_pc += 0.01;
+            } else {
+                this._fade_pc = 1;
+                stage_actions.push(this._fade_act);
+            }
         }
     }
 
@@ -870,10 +897,12 @@ let ui_menu = new UI_MainMenu();
 
 document.addEventListener("keydown", function (evt) {
     ui_menu.Key(evt.key, true);
+    keys[evt.key] = true;
 }, false);
 
 document.addEventListener("keyup", function (evt) {
     ui_menu.Key(evt.key, false);
+    keys[evt.key] = false;
 }, false);
 
 document.addEventListener("mousemove", function (evt) {
