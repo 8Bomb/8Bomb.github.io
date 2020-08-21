@@ -42,7 +42,7 @@ const MAP_COLORS = {
     Kansas: {
         "name": "Kansas",
         "bg": 0x176B7D,
-        "tbd1": 0x389276,
+        "wall": 0x389276,
         "ground": 0x9D8E3A,
         "tbd3": 0xCE8F36,
         "magma": 0xF05B52,
@@ -80,6 +80,10 @@ function Tick(dT) {
     // Drawing
     ui_graphics.clear();
     stage_graphics.clear();
+
+    if (loading_stage) {
+        loading_stage.Draw();
+    }
     ui_menu.Draw();
 }
 
@@ -198,6 +202,7 @@ function CommenceStageAction(a) {
                 ui_menu.Destroy();
                 ui_menu = loading_stage;
                 ui_menu.Loaded(true);
+                loading_stage = null;
             }
         } else if (tok[0] === "map") {
             console.log("setting map to " + tok[1]);
@@ -336,6 +341,10 @@ class UI_Button {
         this._text.updateText();
     }
 
+    SetTextAlpha(a) {
+        this._text.alpha = a;
+    }
+
     Draw() {
         if (!this._active) { return; }
 
@@ -410,6 +419,12 @@ class UI_Menu {
         if (this._fading) {
             if (this._fade_pc < 1) {
                 this._fade_pc += 0.01;
+                for (let i = 0; i < this._texts.length; i++) {
+                    this._texts[i].alpha = 1 - this._fade_pc;
+                }
+                for (let i = 0; i < this._buttons.length; i++) {
+                    this._buttons[i].SetTextAlpha(1 - this._fade_pc);
+                }
             } else {
                 this._fade_pc = 1;
                 stage_actions.push(this._fade_act);

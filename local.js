@@ -69,16 +69,17 @@ class LocalPlay {
         this._ge_wid = 2;
         this._ground_wid = WIDTH / this._ge_wid;
         this._ground_height = -HEIGHT/2 + 300;
+        this._ground_dist_to_bot = HEIGHT/2 - this._ground_height;
         for (let i = 0; i < this._ground_wid; i++) {
-            this._elems.push(new GroundElement(-WIDTH/2 + this._ge_wid*i, this._ground_height, this._ge_wid, HEIGHT/2 - this._ground_height));
+            this._elems.push(new GroundElement(-WIDTH/2 + this._ge_wid*i, this._ground_height, this._ge_wid, this._ground_dist_to_bot));
         }
 
         this._user_ball = new UserBall(0, -HEIGHT/2);
         
         this._walls = [];
-        this._walls.push(Bodies.rectangle(-WIDTH/2, 0, 20, HEIGHT, {isStatic:true}));
-        this._walls.push(Bodies.rectangle(WIDTH/2, 0, 20, HEIGHT, {isStatic:true}));
-        World.add(engine.world, this._walls);
+        this._walls.push(new Wall(-WIDTH/2 - 20, -HEIGHT/2, 40, HEIGHT));
+        this._walls.push(new Wall(WIDTH/2 - 20, -HEIGHT/2, 40, HEIGHT));
+
         engine.world.gravity.y = play_opts.gravity === 0 ? 0.05 : play_opts.gravity === 1 ? 0.2 : 0.5;
 
         this._bomb_spawner = new BombSpawner(0, -HEIGHT/2 - 20, WIDTH - 40);
@@ -149,7 +150,13 @@ class LocalPlay {
         this._user_ball.Bomb(x, y, r);
     }
 
-    Destroy() {}
+    Destroy() {
+        for (let i = 0; i < this._walls.length; i++) {
+            this._walls[i].Destroy();
+        }
+
+        // TODO: destroy other stuff
+    }
 
     MouseMove(x, y) {}
     MouseDown(x, y, b) {
@@ -180,7 +187,10 @@ class LocalPlay {
     }
 
     Draw() {
-        if (this._loading) { return; }
+        stage_graphics.lineStyle(0);
+        stage_graphics.beginFill(DarkenColor(MAP_COLORS[play_opts.map].ground));
+        stage_graphics.drawRect(-WIDTH/2, this._ground_height, WIDTH, this._ground_dist_to_bot);
+        stage_graphics.endFill();
 
         for (let i = 0; i < this._elems.length; i++) {
             this._elems[i].Draw();
@@ -195,6 +205,38 @@ class LocalPlay {
         for (let i = 0; i < this._explosions.length; i++) {
             this._explosions[i].Draw();
         }
+
+        for (let i = 0; i < this._walls.length; i++) {
+            this._walls[i].Draw();
+        }
+    }
+}
+
+class Wall {
+    constructor(l, t, w, h) {
+        this._x = l + w/2;
+        this._y = t + h/2;
+        this._left = l;
+        this._top = t;
+        this._width = w;
+        this._height = h;
+        this._bottom = t + h;
+        this._right = l + w;
+
+        this._body = Bodies.rectangle(this._x, this._y, this._width, this._height, {isStatic:true})
+        
+        World.add(engine.world, [this._body]);
+    }
+
+    Destroy() {
+        World.remove(engine.world, [this._body]);
+    }
+
+    Draw() {
+        stage_graphics.lineStyle(0);
+        stage_graphics.beginFill(MAP_COLORS[play_opts.map].wall);
+        stage_graphics.drawRect(this._left, this._top, this._width, this._height);
+        stage_graphics.endFill();
     }
 }
 
@@ -353,6 +395,8 @@ class Bomb {
         this._body = Bodies.circle(this._x, this._y, this._radius, 6);
         this._body.restitution = 0.1;
         World.add(engine.world, [this._body]);
+
+        // TODO: rather than a total lifetime timer, make the timer begin when the bomb hits ground
     }
 
     Tick(dT) {
@@ -446,7 +490,7 @@ class BombSpawner {
 
         if (Math.random() < this._spawn_chance) {
             this._spawn_chance = this._spawn_chance_starting;
-            this._bombs.push(new Bomb(this._left + this._width * Math.random(), this._y, 2+Math.random()*8, 200 + 80*Math.random()));
+            this._bombs.push(new Bomb(this._left + this._width * Math.random(), this._y, 4+Math.random()*6, 200 + 80*Math.random()));
         } else {
             this._spawn_chance *= play_opts.bomb_factor === 0 ? 1.01 : 1.02;
         }
