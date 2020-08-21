@@ -7,6 +7,8 @@
 // Disable right click menu. Avoid this line.
 // document.addEventListener("contextmenu", function (e) { e.preventDefault(); });
 
+const fmath = new FMath();
+
 const WIDTH = window.innerWidth;
 const HEIGHT = window.innerHeight;
 
@@ -77,7 +79,7 @@ function Tick(dT) {
 
     // Drawing
     ui_graphics.clear();
-    ui_graphics_front.clear();
+    stage_graphics.clear();
     ui_menu.Draw();
 }
 
@@ -112,8 +114,6 @@ const stage_graphics = new PIXI.Graphics();
 stage.addChild(stage_graphics);
 const ui_graphics = new PIXI.Graphics();
 ui.addChild(ui_graphics);
-const ui_graphics_front = new PIXI.Graphics();
-app.stage.addChild(ui_graphics_front);
 
 let keys = {w:false,a:false,s:false,d:false};
 
@@ -130,7 +130,7 @@ let play_opts = {
 };
 
 // DEBUG
-//let loading_stage = null;
+let loading_stage = null;
 
 // Matter.js stuff
 let Engine = Matter.Engine;
@@ -139,9 +139,9 @@ let Bodies = Matter.Bodies;
 let engine = Engine.create();
 
 engine.world.gravity.y = 0.2;
-engine.enabled = false;
+engine.timing.timeScale = 0;
 
-//Engine.run(engine);
+Engine.run(engine);
 
 // Setup //////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -196,10 +196,8 @@ function CommenceStageAction(a) {
                 loading_stage = new LocalPlay();
             } else if (tok[1] === "start") {
                 ui_menu.Destroy();
-                delete ui_menu;
                 ui_menu = loading_stage;
                 ui_menu.Loaded(true);
-                loading_stage = null;
             }
         } else if (tok[0] === "map") {
             console.log("setting map to " + tok[1]);
@@ -523,9 +521,9 @@ class UI_Menu {
         }
 
         if (this._fading) {
-            ui_graphics_front.beginFill(0x000000, this._fade_pc);
-            ui_graphics_front.drawRect(0, 0, WIDTH, HEIGHT);
-            ui_graphics_front.endFill();
+            ui_graphics.beginFill(0x000000, this._fade_pc);
+            ui_graphics.drawRect(0, 0, WIDTH, HEIGHT);
+            ui_graphics.endFill();
         }
     }
 }
