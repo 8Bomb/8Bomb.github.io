@@ -5,6 +5,7 @@
 const Engine = Matter.Engine;
 const World = Matter.World;
 const Bodies = Matter.Bodies;
+const Body = Matter.Body;
 
 engine = Engine.create();
 engine.world.gravity.y = 0.2;
@@ -49,7 +50,6 @@ class LocalNetworkEmulator {
 
 class Engine_8Bomb {
     constructor() {
-        this._ids = [];
         this._objs = {};
         
         this._ge_wid = 2;
@@ -61,7 +61,7 @@ class Engine_8Bomb {
 
         this._tasks = [];
 
-        this._update_period = 10;
+        this._update_period = 100;
         this._update_time = 0;
 
         this._running = false;
@@ -71,38 +71,40 @@ class Engine_8Bomb {
 
         this._bomb_added = 0;
         this._bomb_removed = 0;
+
+        this._keylen = 5;
+
+        this._updates_num = 0;
+        this._updates_timer = 0;
+
+        this._CreateWorld();
     }
 
     _CreateWorld() {
         console.log("ENGINE creating new world.");
 
-        let id = this._NewID(3);
+        let id = this._NewID(this._keylen);
         for (let i = 0; i < this._ground_wid; i++) {
-            id = this._NewID(3);
-            this._ids.push(id);
+            id = this._NewID(this._keylen);
             this._objs[id] = new GroundElement(-WIDTH/2 + this._ge_wid*i, this._ground_height, this._ge_wid, this._ground_dist_to_bot);
         }
 
         // Bomb spawner.
-        id = this._NewID(3);
-        this._ids.push(id);
+        id = this._NewID(this._keylen);
         this._bomb_spawner = id;
         this._objs[id] = new BombSpawner(0, -HEIGHT/2 - 20, WIDTH - 40);
         
         // Magma.
-        id = this._NewID(3);
-        this._ids.push(id);
+        id = this._NewID(this._keylen);
         this._magma = id;
         this._objs[id] = new Magma(0, HEIGHT/2 - 40, WIDTH, 80);
         
         // Left wall.
-        id = this._NewID(3);
-        this._ids.push(id);
+        id = this._NewID(this._keylen);
         this._objs[id] = new Wall(-WIDTH/2 - 20, -HEIGHT/2, 40, HEIGHT);
 
         // Right wall.
-        id = this._NewID(3);
-        this._ids.push(id);
+        id = this._NewID(this._keylen);
         this._objs[id] = new Wall(WIDTH/2 - 20, -HEIGHT/2, 40, HEIGHT);
     }
 
@@ -115,10 +117,7 @@ class Engine_8Bomb {
     }
 
     _AddObjToSpec(id) {
-        if (id in this._objs) {}
-        else {
-            return null;
-        }
+        if (this._objs[id] === undefined) { return null; }
         const type = this._objs[id].type;
         let specs = {
             a: "u",
@@ -157,8 +156,8 @@ class Engine_8Bomb {
             a: "aur",
             s: [],
         };
-        for (let i = 0; i < this._ids.length; i++) {
-            const res = this._AddObjToSpec(this._ids[i]);
+        for (let k in this._objs) {
+            const res = this._AddObjToSpec(k);
             if (res !== null) {
                 msg_8B.s.push(res);
             }
@@ -172,55 +171,40 @@ class Engine_8Bomb {
     }
 
     _UpdateClient() {
+        this._updates_num++;
         let msg_8B = {
             a: "aur",
             s: [],
         };
-        for (let i = 0; i < this._ids.length; i++) {
-            const o = this._objs[this._ids[i]];
+        for (let k in this._objs) {
+            const o = this._objs[k];
 
             if (o.type !== "b" && o.type !== "u") { continue; }
 
             msg_8B.s.push({
                 a: "u",
-                i: this._ids[i],
+                i: k,
                 t: o.type,
                 s: {
                     x: o.x, y: o.y, r:o.radius,
+                    vx: o.vx, vy: o.vy,
                 },
             });
         }
-        let off = 0;
+
         while (this._rmQ.length > 0) {
-            const id = this._ids[this._rmQ[0]];
-
-            if (this._objs[id] === undefined) {
-                const num = this._rmQ[0];
-                for (let i = 1; i < this._rmQ.length; i++) {
-                    if (this._rmQ[i] > num) {
-                        this._rmQ[i]--;
-                    }
-                }
-                this._rmQ.splice(0, 1);
-                continue;
-            }
-
+            const id = this._rmQ[0];
             msg_8B.s.push({
                 a: "r",
                 i: id,
             });
-            this._objs[id].Destroy();
-            delete this._objs[id];
-            this._ids.splice(this._rmQ[0], 1);
-            
-            const num = this._rmQ[0];
-            for (let i = 1; i < this._rmQ.length; i++) {
-                if (this._rmQ[i] > num) {
-                    this._rmQ[i]--;
-                }
+            if (this._objs[id] !== undefined) {
+                this._objs[id].Destroy();
             }
+            delete this._objs[id];
             this._rmQ.splice(0, 1);
         }
+
         while (this._addQ.length > 0) {
             const res = this._AddObjToSpec(this._addQ[0]);
             if (res !== null) {
@@ -249,8 +233,7 @@ class Engine_8Bomb {
     }
 
     AddBomb(x, y, r, t) {
-        const id = this._NewID(3);
-        this._ids.push(id);
+        const id = this._NewID(this._keylen);
         this._objs[id] = new Bomb(x, y, r, t);
     }
 
@@ -322,8 +305,7 @@ class Engine_8Bomb {
                 this._clientIDs.push(cid);
                 
                 // generate a user ball upon connect.
-                let id = this._NewID(3);
-                this._ids.push(id);
+                let id = this._NewID(this._keylen);
                 this._objs[id] = new UserBall(0, -HEIGHT/2);
 
                 console.log("ENGINE adding new user ball");
@@ -354,29 +336,28 @@ class Engine_8Bomb {
 
         if (!this._running) { return; }
 
-        for (let i = 0; i < this._ids.length; i++) {
-            const o = this._objs[this._ids[i]];
+        for (let k in this._objs) {
+            const o = this._objs[k];
             o.Tick(dT);
 
             if (o.active === false) {
-                this._rmQ.push(i);
+                this._rmQ.push(k);
             }
         }
 
         // See if clients need updated.
+        this._update_time += dT;
         if (this._update_time >= this._update_period) {
             this._update_time = 0;
             this._UpdateClient();
-        } else {
-            this._update_time += dT;
         }
 
-        console.log("DEBUG nID: " + this._ids.length + ", b+: " + this._bomb_added + ", b-: " + this._bomb_removed);
+        //console.log("DEBUG nID: " + Object.keys(this._objs).length + ", b+: " + this._bomb_added + ", b-: " + this._bomb_removed);
     }
     
     Collides(b) {
-        for (let i = 0; i < this._ids.length; i++) {
-            const o = this._objs[this._ids[i]];
+        for (let k in this._objs) {
+            const o = this._objs[k];
             if (o.type === "g" || o.type === "w" || o.type === "b") {
                 if (Matter.SAT.collides(b, o._body).collided) { return true; }
             }
@@ -385,13 +366,17 @@ class Engine_8Bomb {
     }
     
     Bomb(x, y, r=30) {
-        for (let xp = x - r + 1; xp < x + r - 1; xp += this._ge_wid/2) {
+        let changes = {};
+        for (let xp = x - r + 1; xp < x + r - 1; xp += this._ge_wid) {
             const yd = fmath.sin(Math.acos((x - xp) / r)) * r;
             const yb = y + yd;
             const yt = y - yd;
-            for (let i = 0; i < this._ids.length; i++) {
-                const o = this._objs[this._ids[i]];
+            for (let k in this._objs) {
+                const o = this._objs[k];
                 if (o.type !== "g") { continue; }
+
+                // NOTE
+                // perhaps this adds way more than 2 ground elemnts on each bomb?
 
                 if (o.WithinXBounds(xp)) {
                     // If bomb explosion bottom reaches past top of elem.
@@ -400,9 +385,8 @@ class Engine_8Bomb {
                         // Add lower element.
                         if (yb < o.bottom) {
                             gotone = true;
-                            let id = this._NewID(3);
-                            this._ids.push(id);
-                            this._objs[id] = new GroundElement(o.left, yb + 1, o.width, o.bottom - (yb + 1));
+                            let id = this._NewID(this._keylen);
+                            changes[id] = new GroundElement(o.left, yb + 1, o.width, o.bottom - (yb + 1));
                             this._addQ.push(id);
                             this._bomb_added++;
                         }
@@ -411,9 +395,8 @@ class Engine_8Bomb {
                         if (o.top < yt && yt < o.bottom) {
                             const ht = (yt - o.top) - 1;
                             if (ht > this._ge_wid) {
-                                let id = this._NewID(3);
-                                this._ids.push(id);
-                                this._objs[id] = new GroundElement(o.left, o.top, o.width, ht);
+                                let id = this._NewID(this._keylen);
+                                changes[id] = new GroundElement(o.left, o.top, o.width, ht);
                                 this._addQ.push(id);
                                 this._bomb_added++;
                             }
@@ -427,7 +410,7 @@ class Engine_8Bomb {
 
                         // Remove old element.
                         if (gotone) {
-                            this._rmQ.push(i);
+                            this._rmQ.push(k);
                             this._bomb_removed++;
                         }
                     }
@@ -435,8 +418,13 @@ class Engine_8Bomb {
             }
         }
 
-        for (let i = 0; i < this._ids.length; i++) {
-            const o = this._objs[this._ids[i]];
+        // This seems to fix the increasing object count.
+        for (let k in changes) {
+            this._objs[k] = changes[k];
+        }
+
+        for (let k in this._objs) {
+            const o = this._objs[k];
             if (o.type === "u") {
                 o.Bomb(x, y, r);
             }
@@ -446,10 +434,9 @@ class Engine_8Bomb {
     Destroy() {
         console.log("ENGINE destroying.");
 
-        while (this._ids.length > 0) {
-            this._objs[this._ids[0]].Destroy();
-            delete this._objs[this._ids[0]];
-            this._ids.splice(0, 1);
+        for (let k in this._objs) {
+            this._objs[k].Destroy();
+            delete this._objs[k];
         }
     }
 }
@@ -521,6 +508,8 @@ class UserBall {
         this.x = x;
         this.y = y;
         this.radius = 8;
+        this.vx = 0;
+        this.vy = 0;
 
         this._falling = true;
         
@@ -529,7 +518,7 @@ class UserBall {
         this._body.slop = 0.02;
         World.add(engine.world, [this._body]);
 
-        this._jumpcd_max = 30;
+        this._jumpcd_max = 1000;
         this._jumpcd = 0;
 
         this._jumpframes_max = 10;
@@ -563,7 +552,7 @@ class UserBall {
     Tick(dT) {
         if (!this.active) { return; }
 
-        const grounded = engine_local.Collides(this._body);
+        const grounded = engine_network.Collides(this._body);
 
         // The player moves faster when grounded.
         if (grounded) {
@@ -598,6 +587,8 @@ class UserBall {
 
         this.x = this._body.position.x;
         this.y = this._body.position.y;
+        this.vx = this._body.velocity.x;
+        this.vy = this._body.velocity.y;
     }
 }
 
@@ -606,6 +597,9 @@ class Bomb {
         this.x = x;
         this.y = y;
         this.radius = r;
+        this.vx = 0;
+        this.vy = 0;
+
         if (this.radius < 4) {
             this._color = 0xf5ce42;
         } else if (this.radius < 8) {
@@ -641,6 +635,8 @@ class Bomb {
 
         this.x = this._body.position.x;
         this.y = this._body.position.y;
+        this.vx = this._body.velocity.x;
+        this.vy = this._body.velocity.y;
     }
 
     Destroy() {
@@ -651,7 +647,7 @@ class Bomb {
         // TODO: needs to be moved to front end
         //ui_menu.AddExplosion(new BombExplosion(this.x, this.y, this._explosion_radius, this._color));
 
-        engine_local.Bomb(this.x, this.y, this._explosion_radius);
+        engine_network.Bomb(this.x, this.y, this._explosion_radius);
 
         this.active = false;
     }
@@ -681,7 +677,7 @@ class BombSpawner {
     Tick(dT) {
         if (Math.random() < this._spawn_chance) {
             this._spawn_chance = this._spawn_chance_starting;
-            engine_local.AddBomb(this.left + this.width * Math.random(), this.y, 4+Math.random()*6, 200 + 80*Math.random());
+            engine_network.AddBomb(this.left + this.width * Math.random(), this.y, 4+Math.random()*6, 3000 + 3000*Math.random());
         } else {
             this._spawn_chance *= play_opts.bomb_factor === 0 ? 1.01 : 1.02;
         }

@@ -12,8 +12,6 @@ const fmath = new FMath();
 const WIDTH = window.innerWidth;
 const HEIGHT = window.innerHeight;
 
-const DEBUG = false;
-
 const COLORS = {
     GRAND_CANYON: {
         "name": "Grand Canyon",
@@ -67,14 +65,31 @@ const app = new PIXI.Application({
 
 document.body.appendChild(app.view);
 
-function Tick(dT) {
+let prev_tick = window.performance.now();
+let updates_num = 0;
+let updates_timer = 0;
+
+function Tick() {
+    let now = window.performance.now();
+    let dT = Math.round((now - prev_tick) * 1000) / 1000;
+    prev_tick = now;
+
+    updates_num++;
+    updates_timer += dT;
+    if (updates_timer > 3000) {
+        const fps = Math.round(updates_num / updates_timer * 1000);
+        console.log("fps: " + fps);
+        updates_num = 0;
+        updates_timer = 0;
+    }
+
     for (let i = 0; i < stage_actions.length; i++) {
         CommenceStageAction(stage_actions[i]);
         stage_actions.splice(i, 1);
         i--;
     }
 
-    engine_local.Tick(dT);
+    engine_network.Tick(dT);
 
     // Ticking
     ui_menu.Tick(dT);
@@ -143,7 +158,12 @@ let play_opts = {
 let loading_stage = null;
 
 let network = new LocalNetworkEmulator();
-let engine_local = new Engine_8Bomb();
+let engine_network = new Engine_8Bomb();
+
+let engine_local = Engine.create();
+engine_local.world.gravity.y = 0.2;
+engine_local.timing.timeScale = 0;
+Engine.run(engine_local);
 
 // Setup //////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
