@@ -1,0 +1,10 @@
+Aug 21, 2020:
+    R.H.:
+        Movement could be fast.
+        Objective needs to be defined.
+        Controls were pretty intuitive.
+        Jump higher.
+        Skins/textures.
+    M.N:
+        Doesn't get the point.
+        Ball is slow.

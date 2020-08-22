@@ -1,0 +1,127 @@
+Objects sent of the network have a particular js structure, built for efficiency.
+Shown below is an example (including extra symbols for clarity).
+
+{
+    a: "aur",
+    s: [
+        {
+            a: "u",
+            i: "8vd",
+            t: "w",
+            s: {
+                "x": -400,
+                "y": -200,
+                "w": 40,
+                "h": 800,
+            },
+        },
+        {
+            a: "u",
+            i: "vsD",
+            t: "w",
+            s: {
+                "x": 400,
+                "y": -200,
+                "w": 40,
+                "h": 800,
+            },
+        },
+        ...
+    ]
+}
+
+a: action
+    aur: add/update/remove
+    str: start world
+    stp: stop world
+s: specs (array)
+    a: action
+        u: update (same as add)
+        e: explode
+    i: id
+    t: type
+        w: wall
+        g: ground element
+        b: bomb
+        u: user
+        bs: bomb spawner
+        m: magma
+    s: specifications, dependent on type
+        x: x (always center of obj)
+        y: y (always center of obj)
+        vx: velocity x
+        vy: velocity y
+        w: width
+        h: height
+        r: radius
+
+---------------------------------------------------------------------------------------------------
+CLIENT -> SERVER
+---------------------------------------------------------------------------------------------------
+Connections are initiated with the exchange of a server and client init message.
+Client first sends the server, server will respond.
+Client sends a CS_Init message.
+
+{
+    "type": "check",
+    "reqID": "8Doj0y",
+    "spec": {
+        "game": "8Bomb",
+        "version": "0.1",
+    },
+}
+
+type:
+    ping: client wants to check server status
+    check: client wants to check if game/version is available
+    connect: client wants to connect
+    vote: client casts a vote
+    admin: client takes an admin action
+reqID: request ID (4 char request)
+spec: specifications
+    ping:
+        tsent: any
+    check:
+        game: expects "8Bomb"
+        version: expects "0.1"
+    connect:
+        TODO
+    vote:
+        type: type of vote, one of below:
+            start
+            stop
+    admin:
+        TODO
+
+---------------------------------------------------------------------------------------------------
+SERVER -> CLIENT
+---------------------------------------------------------------------------------------------------
+Server responds with a SC_Init message.
+
+{
+    "type": "connect-response",
+    "resID": "8Doj0y",
+    "spec": {
+        "reqID": "8Doj0y",
+        "good": true,
+        "cID": "bj12ffDP",
+    },
+}
+
+type:
+    check-response: response to client check
+    connect-response: response to client connect
+    8B: game messages for 8Bomb
+resID: response (request) ID - ALWAYS resID for server -> client
+spec:
+    pong:
+        reqID: request ID being referenced, must match
+        tsent: time sent from ping message
+    check-response:
+        reqID: request ID being referenced, must match
+        good: 1,
+    connect-response:
+        reqID: request ID being referenced, must match
+        good: 1,
+        cID: client id given to corresponding client
+    8B: see top for game messages - different, efficient format

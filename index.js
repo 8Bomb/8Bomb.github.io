@@ -63,8 +63,6 @@ const app = new PIXI.Application({
     antialias: true,
 });
 
-app.ticker.add(Tick);
-
 document.body.appendChild(app.view);
 
 function Tick(dT) {
@@ -74,6 +72,8 @@ function Tick(dT) {
         i--;
     }
 
+    engine_local.Tick(dT);
+
     // Ticking
     ui_menu.Tick(dT);
 
@@ -82,6 +82,7 @@ function Tick(dT) {
     stage_graphics.clear();
 
     if (loading_stage) {
+        loading_stage.Tick(dT);
         loading_stage.Draw();
     }
     ui_menu.Draw();
@@ -136,16 +137,8 @@ let play_opts = {
 // DEBUG
 let loading_stage = null;
 
-// Matter.js stuff
-let Engine = Matter.Engine;
-let World = Matter.World;
-let Bodies = Matter.Bodies;
-let engine = Engine.create();
-
-engine.world.gravity.y = 0.2;
-engine.timing.timeScale = 0;
-
-Engine.run(engine);
+let network = new LocalNetworkEmulator();
+let engine_local = new Engine_8Bomb();
 
 // Setup //////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -201,7 +194,6 @@ function CommenceStageAction(a) {
             } else if (tok[1] === "start") {
                 ui_menu.Destroy();
                 ui_menu = loading_stage;
-                ui_menu.Loaded(true);
                 loading_stage = null;
             }
         } else if (tok[0] === "map") {
@@ -224,6 +216,13 @@ function CommenceStageAction(a) {
                 play_opts.bomb_factor = 1;
             } else if (tok[1] === "high") {
                 play_opts.bomb_factor = 2;
+            }
+        } else if (tok[0] === "connect") {
+            console.log("handling connect " + tok[1]);
+            if (tok[1] === "failed") {
+                ui_menu.Destroy();
+                ui_menu = new UI_MainMenu();
+                loading_stage = null;
             }
         }
     }
@@ -380,6 +379,7 @@ class UI_Button {
 
 class UI_Menu {
     constructor(s="NONE") {
+        app.renderer.backgroundColor = color_scheme.bg;
         this._buttons = [];
         this._selected_button = 0;
         this._title_str = "NONE";
@@ -903,6 +903,8 @@ We look forward to dodging bombs with you!";
 // Stage //////////////////////////////////////////////////////////////////////////////////////////
 
 let ui_menu = new UI_MainMenu();
+
+app.ticker.add(Tick);
 
 // Stage //////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
