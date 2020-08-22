@@ -12,6 +12,8 @@ const fmath = new FMath();
 const WIDTH = window.innerWidth;
 const HEIGHT = window.innerHeight;
 
+const DEBUG = false;
+
 const COLORS = {
     GRAND_CANYON: {
         "name": "Grand Canyon",
@@ -80,6 +82,7 @@ function Tick(dT) {
     // Drawing
     ui_graphics.clear();
     stage_graphics.clear();
+    fore_graphics.clear();
 
     if (loading_stage) {
         loading_stage.Tick(dT);
@@ -117,6 +120,8 @@ viewport.moveCenter(0, 0);
 
 const stage_graphics = new PIXI.Graphics();
 stage.addChild(stage_graphics);
+const fore_graphics = new PIXI.Graphics();
+stage.addChild(fore_graphics);
 const ui_graphics = new PIXI.Graphics();
 ui.addChild(ui_graphics);
 

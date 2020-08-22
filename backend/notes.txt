@@ -32,8 +32,9 @@ Shown below is an example (including extra symbols for clarity).
 
 a: action
     aur: add/update/remove
-    str: start world
-    stp: stop world
+    cw: clear world
+    str: start world TODO
+    stp: stop world TODO
 s: specs (array)
     a: action
         u: update (same as add)

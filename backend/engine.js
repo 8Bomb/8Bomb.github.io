@@ -57,6 +57,25 @@ class Engine_8Bomb {
         this._ground_height = -HEIGHT/2 + 300;
         this._ground_dist_to_bot = HEIGHT/2 - this._ground_height;
 
+        this._clientIDs = [];
+
+        this._tasks = [];
+
+        this._update_period = 10;
+        this._update_time = 0;
+
+        this._running = false;
+
+        this._rmQ = [];
+        this._addQ = [];
+
+        this._bomb_added = 0;
+        this._bomb_removed = 0;
+    }
+
+    _CreateWorld() {
+        console.log("ENGINE creating new world.");
+
         let id = this._NewID(3);
         for (let i = 0; i < this._ground_wid; i++) {
             id = this._NewID(3);
@@ -85,17 +104,6 @@ class Engine_8Bomb {
         id = this._NewID(3);
         this._ids.push(id);
         this._objs[id] = new Wall(WIDTH/2 - 20, -HEIGHT/2, 40, HEIGHT);
-
-        this._clientIDs = [];
-
-        this._tasks = [];
-
-        this._update_period = 10;
-        this._update_time = 0;
-
-        this._running = false;
-
-        this._rmQ = [];
     }
 
     _NewID(n) {
@@ -106,34 +114,54 @@ class Engine_8Bomb {
         return id;
     }
 
+    _AddObjToSpec(id) {
+        if (id in this._objs) {}
+        else {
+            return null;
+        }
+        const type = this._objs[id].type;
+        let specs = {
+            a: "u",
+            i: id,
+            t: type,
+            s: {}
+        };
+        const o = this._objs[id];
+        if (type === "w" || type === "bs" || type === "g" || type === "m") {
+            specs.s = {
+                x: o.x,
+                y: o.y,
+                w: o.width,
+                h: o.height,
+            };
+        } else if (type === "b" || type === "u") {
+            specs.s = {
+                x: o.x,
+                y: o.y,
+                r: o.radius,
+            }
+        }
+        return specs;
+    }
+
     _InitClient(id, cid) {
+        network.ServerSend(JSON.stringify({
+            type: "8B",
+            resID: GenRequestID(6),
+            spec: {
+                a: "cw"
+            },
+        }));
+
         let msg_8B = {
             a: "aur",
             s: [],
         };
         for (let i = 0; i < this._ids.length; i++) {
-            const type = this._objs[this._ids[i]].type;
-            let specs = {
-                a: "u",
-                i: this._ids[i],
-                t: type,
-                s: {}
-            };
-            if (type === "w" || type === "bs" || type === "g" || type === "m") {
-                specs.s = {
-                    x: this._objs[this._ids[i]].x,
-                    y: this._objs[this._ids[i]].y,
-                    w: this._objs[this._ids[i]].width,
-                    h: this._objs[this._ids[i]].height,
-                };
-            } else if (type === "b" || type === "u") {
-                specs.s = {
-                    x: this._objs[this._ids[i]].x,
-                    y: this._objs[this._ids[i]].y,
-                    r: this._objs[this._ids[i]].radius,
-                }
+            const res = this._AddObjToSpec(this._ids[i]);
+            if (res !== null) {
+                msg_8B.s.push(res);
             }
-            msg_8B.s.push(specs);
         }
 
         network.ServerSend(JSON.stringify({
@@ -162,12 +190,43 @@ class Engine_8Bomb {
                 },
             });
         }
+        let off = 0;
         while (this._rmQ.length > 0) {
+            const id = this._ids[this._rmQ[0]];
+
+            if (this._objs[id] === undefined) {
+                const num = this._rmQ[0];
+                for (let i = 1; i < this._rmQ.length; i++) {
+                    if (this._rmQ[i] > num) {
+                        this._rmQ[i]--;
+                    }
+                }
+                this._rmQ.splice(0, 1);
+                continue;
+            }
+
             msg_8B.s.push({
                 a: "r",
-                i: this._rmQ[0],
+                i: id,
             });
+            this._objs[id].Destroy();
+            delete this._objs[id];
+            this._ids.splice(this._rmQ[0], 1);
+            
+            const num = this._rmQ[0];
+            for (let i = 1; i < this._rmQ.length; i++) {
+                if (this._rmQ[i] > num) {
+                    this._rmQ[i]--;
+                }
+            }
             this._rmQ.splice(0, 1);
+        }
+        while (this._addQ.length > 0) {
+            const res = this._AddObjToSpec(this._addQ[0]);
+            if (res !== null) {
+                msg_8B.s.push(res);
+            }
+            this._addQ.splice(0, 1);
         }
 
         network.ServerSend(JSON.stringify({
@@ -267,6 +326,8 @@ class Engine_8Bomb {
                 this._ids.push(id);
                 this._objs[id] = new UserBall(0, -HEIGHT/2);
 
+                console.log("ENGINE adding new user ball");
+
                 this._InitClient(id, cid);
             } else if (rxp.type === "admin") {
                 console.log("ADMIN: Got an admin action!");
@@ -274,6 +335,13 @@ class Engine_8Bomb {
                     this.Start();
                 } else if (rxp.spec.action === "stop") {
                     this.Stop();
+                } else if (rxp.spec.action === "destroy") {
+                    this.Destroy();
+                } else if (rxp.spec.action === "create") {
+                    this._CreateWorld();
+                    this._InitClient();
+                } else {
+                    console.log("Couldn't handle admin action " + rxp.spec.action);
                 }
             } else {
                 console.log("Server couldn't handle " + rxp.type);
@@ -291,22 +359,19 @@ class Engine_8Bomb {
             o.Tick(dT);
 
             if (o.active === false) {
-                o.Destroy();
-                delete this._objs[this._ids[i]];
-                this._rmQ.push(this._ids[i]);
-                this._ids.splice(i, 1);
-                i--;
+                this._rmQ.push(i);
             }
         }
 
         // See if clients need updated.
         if (this._update_time >= this._update_period) {
-            console.log("updating client.");
             this._update_time = 0;
             this._UpdateClient();
         } else {
             this._update_time += dT;
         }
+
+        console.log("DEBUG nID: " + this._ids.length + ", b+: " + this._bomb_added + ", b-: " + this._bomb_removed);
     }
     
     Collides(b) {
@@ -334,38 +399,36 @@ class Engine_8Bomb {
                         let gotone = false;
                         // Add lower element.
                         if (yb < o.bottom) {
-                            // TODO
                             gotone = true;
-                            continue;
-                            this._elems.push(new GroundElement(o.left, yb + 1, o.width, o.bottom - (yb + 1)));
+                            let id = this._NewID(3);
+                            this._ids.push(id);
+                            this._objs[id] = new GroundElement(o.left, yb + 1, o.width, o.bottom - (yb + 1));
+                            this._addQ.push(id);
+                            this._bomb_added++;
                         }
 
                         // Check if upper element should be added.
                         if (o.top < yt && yt < o.bottom) {
                             const ht = (yt - o.top) - 1;
-                            if (ht > 2) {
-                                // TODO
-                                continue;
-                                this._elems.push(new GroundElement(o.left, o.top, o.width, ht));
+                            if (ht > this._ge_wid) {
+                                let id = this._NewID(3);
+                                this._ids.push(id);
+                                this._objs[id] = new GroundElement(o.left, o.top, o.width, ht);
+                                this._addQ.push(id);
+                                this._bomb_added++;
                             }
-                            console.log("a");
                             gotone = true;
                         }
 
                         // finally, check if the entire element is within the blast.
                         if (o.top > yt && o.bottom < yb) {
-                            console.log("b");
                             gotone = true;
                         }
 
                         // Remove old element.
                         if (gotone) {
-                            console.log("here");
-                            o.Destroy();
-                            delete this._objs[this._ids[i]];
-                            this._rmQ.push(this._ids[i]);
-                            this._ids.splice(i, 1);
-                            i--;
+                            this._rmQ.push(i);
+                            this._bomb_removed++;
                         }
                     }
                 }
@@ -381,11 +444,13 @@ class Engine_8Bomb {
     }
 
     Destroy() {
-        for (let i = 0; i < this._walls.length; i++) {
-            this._walls[i].Destroy();
-        }
+        console.log("ENGINE destroying.");
 
-        // TODO: destroy other stuff
+        while (this._ids.length > 0) {
+            this._objs[this._ids[0]].Destroy();
+            delete this._objs[this._ids[0]];
+            this._ids.splice(0, 1);
+        }
     }
 }
 
@@ -566,6 +631,8 @@ class Bomb {
     }
 
     Tick(dT) {
+        if (!this.active) { return; }
+
         this._lifetime -= dT;
         
         if (this._lifetime <= 0) {
@@ -577,6 +644,8 @@ class Bomb {
     }
 
     Destroy() {
+        if (!this.active) { return; }
+
         World.remove(engine.world, [this._body]);
 
         // TODO: needs to be moved to front end
@@ -607,6 +676,8 @@ class BombSpawner {
         this._spawn_chance = this._spawn_chance_starting;
     }
 
+    Destroy() {}
+
     Tick(dT) {
         if (Math.random() < this._spawn_chance) {
             this._spawn_chance = this._spawn_chance_starting;
@@ -631,6 +702,8 @@ class Magma {
         this.active = true;
         this.type = "m";
     }
+
+    Destroy() {}
 
     Tick(dT) {}
 

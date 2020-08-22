@@ -98,6 +98,14 @@ class LocalPlay {
         }));
     }
 
+    _ClearWorld() {
+        while (this._ids.length > 0) {
+            this._objs[this._ids[0]].Destroy();
+            delete this._objs[this._ids[0]];
+            this._ids.splice(0, 1);
+        }
+    }
+
     _HandleNetwork() {
         // Handle network.
         const rx = network.ClientRecv();
@@ -138,6 +146,7 @@ class LocalPlay {
                 }
             } else if (rxp.type === "8B") {
                 if (rxp.spec.a === "aur") {
+                    let lost = "LOST ";
                     for (let i = 0; i < rxp.spec.s.length; i++) {
                         const o = rxp.spec.s[i];
                         if (o.a === "u") {
@@ -152,7 +161,7 @@ class LocalPlay {
                                 } else if (o.t === "u") {
                                     this._objs[o.i] = new Draw_UserBall(o.s.x, o.s.y, o.s.r);
                                 } else if (o.t === "bs") {
-                                    console.log("couldn't add/update bomb spawner.");
+                                    this._objs[o.i] = new Draw_BombSpawner();
                                 } else if (o.t === "m") {
                                     this._objs[o.i] = new Draw_Magma(o.s.x, o.s.y, o.s.w, o.s.h);
                                 }
@@ -165,11 +174,24 @@ class LocalPlay {
                                 this._objs[o.i].Update(o.s.x, o.s.y);
                             }
                         } else if (o.a === "r") {
-                            this._objs[o.i].Destroy();
-                            this._ids.splice(this._ids.indexOf(o.a), 1);
-                            delete this._objs[o.i];
+                            if (o.i in this._objs) {
+                                this._objs[o.i].Destroy();
+                                this._ids.splice(this._ids.indexOf(o.i), 1);
+                                delete this._objs[o.i];
+                            } else {
+                                //console.log("TODO: this should never appear???");
+                                //console.log("idx: " + this._ids.indexOf(o.i));
+                                lost += "" + o.i + ",";
+                            }
                         }
                     }
+                    if (lost !== "LOST ") {
+                        if (DEBUG) {
+                            console.log(lost);
+                        }
+                    }
+                } else if (rxp.spec.a === "cw") {
+                    this._ClearWorld();
                 }
             } else {
                 console.log("Client couldn't handle " + rxp.type);
@@ -182,9 +204,49 @@ class LocalPlay {
             "type": "admin",
             "reqID": GenRequestID(6),
             "spec": {
+                "action": "destroy",
+            },
+        }));
+        network.ClientSend(JSON.stringify({
+            "type": "admin",
+            "reqID": GenRequestID(6),
+            "spec": {
+                "action": "create",
+            },
+        }));
+        network.ClientSend(JSON.stringify({
+            "type": "connect",
+            "reqID": GenRequestID(6),
+            "spec": {},
+        }));
+        network.ClientSend(JSON.stringify({
+            "type": "admin",
+            "reqID": GenRequestID(6),
+            "spec": {
                 "action": "start",
             },
         }));
+    }
+
+    Stop() {
+        network.ClientSend(JSON.stringify({
+            "type": "admin",
+            "reqID": GenRequestID(6),
+            "spec": {
+                "action": "stop",
+            },
+        }));
+        network.ClientSend(JSON.stringify({
+            "type": "admin",
+            "reqID": GenRequestID(6),
+            "spec": {
+                "action": "destroy",
+            },
+        }));
+    }
+
+    Destroy() {
+        this.Stop();
     }
 
     Tick(dT) {
@@ -201,7 +263,12 @@ class LocalPlay {
         //const pt = viewport.toWorld(x, y);
         //this.Bomb(pt.x, pt.y);
     }
-    Key(k, d) {}
+    Key(k, d) {
+        // DEBUG
+        if (k === "Escape") {
+            stage_actions.push("connect failed");
+        }
+    }
 
     Draw() {
         for (let i = 0; i < this._ids.length; i++) {
@@ -232,10 +299,10 @@ class Draw_Wall {
     }
 
     Draw() {
-        stage_graphics.lineStyle(0);
-        stage_graphics.beginFill(MAP_COLORS[play_opts.map].wall);
-        stage_graphics.drawRect(this._left, this._top, this._width, this._height);
-        stage_graphics.endFill();
+        fore_graphics.lineStyle(0);
+        fore_graphics.beginFill(MAP_COLORS[play_opts.map].wall);
+        fore_graphics.drawRect(this._left, this._top, this._width, this._height);
+        fore_graphics.endFill();
     }
 }
 
@@ -371,9 +438,17 @@ class Draw_Magma {
     Tick(dT) {}
 
     Draw() {
-        stage_graphics.lineStyle(0);
-        stage_graphics.beginFill(MAP_COLORS[play_opts.map].magma);
-        stage_graphics.drawRect(this._left, this._top, this._width, this._height);
-        stage_graphics.endFill();
+        fore_graphics.lineStyle(0);
+        fore_graphics.beginFill(MAP_COLORS[play_opts.map].magma);
+        fore_graphics.drawRect(this._left, this._top, this._width, this._height);
+        fore_graphics.endFill();
     }
+}
+
+// DEBUG: placeholder class
+class Draw_BombSpawner {
+    constructor() {}
+    Tick(dt) {}
+    Destroy() {}
+    Draw() {}
 }
