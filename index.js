@@ -44,7 +44,7 @@ const MAP_COLORS = {
         "bg": 0x176B7D,
         "wall": 0x389276,
         "ground": 0x9D8E3A,
-        "tbd3": 0xCE8F36,
+        "bomb": 0xCE8F36,
         "magma": 0xF05B52,
     }
 }
@@ -194,6 +194,7 @@ function CommenceStageAction(a) {
             } else if (tok[1] === "start") {
                 ui_menu.Destroy();
                 ui_menu = loading_stage;
+                ui_menu.Start();
                 loading_stage = null;
             }
         } else if (tok[0] === "map") {

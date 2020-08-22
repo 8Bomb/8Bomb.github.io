@@ -79,20 +79,18 @@ class LocalPlay {
         this._clientID = -1;
 
         // Whie loading, make a ping request.
-        let reqID = GenRequestID(6);
         network.ClientSend(JSON.stringify({
             "type": "ping",
-            "reqID": reqID,
+            "reqID": GenRequestID(6),
             "spec": {
                 "tsent": window.performance.now(),
             },
         }));
 
         // While loading, make a connection request.
-        reqID = GenRequestID(6);
         network.ClientSend(JSON.stringify({
             "type": "check",
-            "reqID": reqID,
+            "reqID": GenRequestID(6),
             "spec": {
                 "game": "8Bomb",
                 "version": "0.1",
@@ -119,10 +117,9 @@ class LocalPlay {
                 if (rxp.spec.good) {
                     this._checked = true;
 
-                    const reqID = GenRequestID(6);
                     network.ClientSend(JSON.stringify({
                         "type": "connect",
-                        "reqID": reqID,
+                        "reqID": GenRequestID(6),
                         "spec": {},
                     }));
                 } else {
@@ -139,10 +136,55 @@ class LocalPlay {
                     this._failed = true;
                     stage_actions.push("connect failed");
                 }
+            } else if (rxp.type === "8B") {
+                if (rxp.spec.a === "aur") {
+                    for (let i = 0; i < rxp.spec.s.length; i++) {
+                        const o = rxp.spec.s[i];
+                        if (o.a === "u") {
+                            if (!(o.i in this._objs)) {
+                                this._ids.push(o.i);
+                                if (o.t === "w") {
+                                    this._objs[o.i] = new Draw_Wall(o.s.x, o.s.y, o.s.w, o.s.h);
+                                } else if (o.t === "g") {
+                                    this._objs[o.i] = new Draw_GroundElement(o.s.x, o.s.y, o.s.w, o.s.h);
+                                } else if (o.t === "b") {
+                                    this._objs[o.i] = new Draw_Bomb(o.s.x, o.s.y, o.s.r);
+                                } else if (o.t === "u") {
+                                    this._objs[o.i] = new Draw_UserBall(o.s.x, o.s.y, o.s.r);
+                                } else if (o.t === "bs") {
+                                    console.log("couldn't add/update bomb spawner.");
+                                } else if (o.t === "m") {
+                                    this._objs[o.i] = new Draw_Magma(o.s.x, o.s.y, o.s.w, o.s.h);
+                                }
+                            }
+                            
+                            // Update all objects.
+                            if (o.t === "w" || o.t === "g" || o.t === "m") {
+                                this._objs[o.i].Update(o.s.x, o.s.y);
+                            } else if (o.t === "b" || o.t === "u") {
+                                this._objs[o.i].Update(o.s.x, o.s.y);
+                            }
+                        } else if (o.a === "r") {
+                            this._objs[o.i].Destroy();
+                            this._ids.splice(this._ids.indexOf(o.a), 1);
+                            delete this._objs[o.i];
+                        }
+                    }
+                }
             } else {
                 console.log("Client couldn't handle " + rxp.type);
             }
         }
+    }
+
+    Start() {
+        network.ClientSend(JSON.stringify({
+            "type": "admin",
+            "reqID": GenRequestID(6),
+            "spec": {
+                "action": "start",
+            },
+        }));
     }
 
     Tick(dT) {
@@ -163,21 +205,30 @@ class LocalPlay {
 
     Draw() {
         for (let i = 0; i < this._ids.length; i++) {
-            this._objs[this._ids[i]].Draw();
+            if (this._ids[i] in this._objs) {
+                this._objs[this._ids[i]].Draw();
+            }
         }
     }
 }
 
 class Draw_Wall {
-    constructor(l, t, w, h) {
-        this._x = l + w/2;
-        this._y = t + h/2;
-        this._left = l;
-        this._top = t;
+    constructor(x, y, w, h) {
+        this._x = x;
+        this._y = y;
+        this._left = x - w/2;
+        this._top = y - h/2;
         this._width = w;
         this._height = h;
-        this._bottom = t + h;
-        this._right = l + w;
+        this._bottom = y + h/2;
+        this._right = x + w/2;
+    }
+
+    Destroy() {}
+
+    Update(x, y) {
+        this._x = x;
+        this._y = y;
     }
 
     Draw() {
@@ -189,15 +240,22 @@ class Draw_Wall {
 }
 
 class Draw_GroundElement {
-    constructor(l, t, w, h) {
-        this._x = l + w/2;
-        this._y = t + h/2;
+    constructor(x, y, w, h) {
+        this._x = x;
+        this._y = y;
         this._width = w;
         this._height = h;
-        this._left = l;
-        this._right = l + w;
-        this._top = t;
-        this._bottom = t + h;
+        this._left = x - w/2;
+        this._right = x + w/2;
+        this._top = y - h/2;
+        this._bottom = y + h/2;
+    }
+
+    Destroy() {}
+
+    Update(x, y) {
+        this._x = x;
+        this._y = y;
     }
 
     Draw() {
@@ -209,10 +267,17 @@ class Draw_GroundElement {
 }
 
 class Draw_UserBall {
-    constructor(x, y, g) {
+    constructor(x, y, r) {
         this._x = x;
         this._y = y;
-        this._radius = 8;
+        this._radius = r;
+    }
+
+    Destroy() {}
+
+    Update(x, y) {
+        this._x = x;
+        this._y = y;
     }
 
     Tick(dT) {}
@@ -230,6 +295,15 @@ class Draw_Bomb {
         this._x = x;
         this._y = y;
         this._radius = r;
+
+        this.active = true;
+    }
+
+    Destroy() {}
+    
+    Update(x, y) {
+        this._x = x;
+        this._y = y;
     }
 
     Tick(dT) {}
@@ -238,12 +312,13 @@ class Draw_Bomb {
         if (this.active === false) { return; }
 
         stage_graphics.lineStyle(1, 0x42e3f5, 1);
-        stage_graphics.beginFill(this._color);
+        stage_graphics.beginFill(MAP_COLORS[play_opts.map].bomb);
         stage_graphics.drawCircle(this._x, this._y, this._radius);
         stage_graphics.endFill();
     }
 }
 
+// TODO: what to do here?
 class Draw_BombExplosion {
     constructor(x, y, r, c) {
         this._x = x;
@@ -254,6 +329,8 @@ class Draw_BombExplosion {
 
         this._active = true;
     }
+
+    Destroy() {}
 
     Tick(dT) {
         this._radius *= 0.95;
@@ -282,6 +359,13 @@ class Draw_Magma {
         this._right = x + w/2;
         this._top = y - h/2;
         this._bottom = y + h/2;
+    }
+
+    Destroy() {}
+
+    Update(x, y) {
+        this._x = x;
+        this._y = y;
     }
 
     Tick(dT) {}
