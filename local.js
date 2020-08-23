@@ -506,3 +506,40 @@ class Draw_BombSpawner {
     Destroy() {}
     Draw() {}
 }
+
+class Network {
+    constructor(ip, port) {
+        this._ip = ip;
+        this._port = port;
+        this._addr = "" + ip + ":" + port;
+
+        this._rxQ = [];
+
+        this._ws = new WebSocket("wss://" + this._addr);
+        this._ws.onopen = this._WSOpen;
+        this._ws.onmessage = this._WSRecv;
+    }
+
+    _WSOpen(evt) {
+        console.log("WS opened")
+    }
+
+    _WSRecv(evt) {
+        console.log("WS rcv")
+        console.log(evt.data);
+    }
+
+    Recv() {
+        if (this._rxQ.length > 0) {
+            const r = this._rxQ[0];
+            this._rxQ.splice(0, 1);
+            return LZUTF8.decompress(r, {inputEncoding:"Base64"});
+        }
+        return "";
+    }
+
+    Send(m) {
+        const msgc = LZUTF8.compress(msg, {outputEncoding:"Base64"});
+        this._ws.send(msgc);
+    }
+}

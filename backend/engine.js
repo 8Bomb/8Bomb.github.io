@@ -69,6 +69,8 @@ class Engine_8Bomb {
 
         this._running = false;
 
+        this._net_set = false;
+
         this._rmQ = [];
         this._addQ = [];
 
@@ -240,6 +242,8 @@ class Engine_8Bomb {
     }
 
     _HandleNetwork() {
+        if (!this._net_set) { return; }
+        
         const rx = network.ServerRecv();
         if (rx !== "") {
             let rxp = {};

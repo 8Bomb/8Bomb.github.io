@@ -157,7 +157,8 @@ let play_opts = {
 // DEBUG
 let loading_stage = null;
 
-let network = new LocalNetworkEmulator();
+//let network = new LocalNetworkEmulator();
+let network = new Network("skyhoffert-backend.com", 5030);
 let engine_network = new Engine_8Bomb();
 
 let engine_local = Engine.create();
