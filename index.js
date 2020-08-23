@@ -163,7 +163,7 @@ let loading_stage = null;
 
 // TODO: add for local play
 //let network = new LocalNetworkEmulator();
-let network_addr = "wss://skyhoffert-backend.com:5030";
+let network_addr = "wss://skyhoffert-backend.com:5060";
 if (LOCAL) {
     network_addr = "ws://localhost:5030";
 }
@@ -195,6 +195,7 @@ function CommenceStageAction(a) {
                 ui_menu = new UI_About();
             } else if (tok[1] === "local-play") {
                 ui_menu = new UI_LocalPlay();
+                network = new Loca
             } else if (tok[1] === "online-play") {
                 ui_menu = new UI_OnlinePlay();
                 network = new Network(network_addr);
