@@ -7,6 +7,8 @@
 // Disable right click menu. Avoid this line.
 // document.addEventListener("contextmenu", function (e) { e.preventDefault(); });
 
+const LOCAL = false;
+
 const fmath = new FMath();
 
 const WIDTH = window.innerWidth;
@@ -73,6 +75,8 @@ function Tick() {
     let now = window.performance.now();
     let dT = Sigs(now - prev_tick);
     prev_tick = now;
+
+    Engine.update(engine_local, dT);
 
     updates_num++;
     updates_timer += dT;
@@ -157,14 +161,18 @@ let play_opts = {
 // DEBUG
 let loading_stage = null;
 
+// TODO: add for local play
 //let network = new LocalNetworkEmulator();
-let network = new Network("skyhoffert-backend.com", 5030);
+let network_addr = "wss://skyhoffert-backend.com:5030";
+if (LOCAL) {
+    network_addr = "ws://localhost:5030";
+}
+let network = null;
 let engine_network = new Engine_8Bomb();
 
 let engine_local = Engine.create();
 engine_local.world.gravity.y = 0.2;
 engine_local.timing.timeScale = 0;
-Engine.run(engine_local);
 
 // Setup //////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -189,6 +197,7 @@ function CommenceStageAction(a) {
                 ui_menu = new UI_LocalPlay();
             } else if (tok[1] === "online-play") {
                 ui_menu = new UI_OnlinePlay();
+                network = new Network(network_addr);
             }
         } else if (tok[0] === "soundfx") {
             console.log("TODO: turn sfx " + tok[1]);
@@ -906,7 +915,8 @@ class UI_OnlinePlay extends UI_Menu {
         this._buttons.push(new UI_Button(
             WIDTH - this._horizontal_offset, this._vertical_offset, 
             this._btn_width, this._btn_height, this._btn_rad, "Donate", this._btn_fs,
-            "donate"));
+            "play fade"));
+            // DEBUG: ^ this should be "donate"
         
         this._selected_button = 0;
         this._buttons[this._selected_button].Select();
@@ -961,6 +971,12 @@ document.addEventListener("mousedown", function (evt) {
 
 document.addEventListener("mouseup", function (evt) {
     //ui_menu.MouseUp(evt.x, evt.y, evt.button);
+}, false);
+
+document.addEventListener("beforeunload", function (evt) {
+    if (network !== null) {
+        network.Destroy();
+    }
 }, false);
 
 // Events /////////////////////////////////////////////////////////////////////////////////////////

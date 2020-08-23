@@ -21,6 +21,8 @@ class LocalNetworkEmulator {
         this._rxS = [];
     }
 
+    Destroy() {}
+
     ClientSend(msg) {
         const msgc = LZUTF8.compress(msg, {outputEncoding:"Base64"});
         this._rxS.push(msgc);
@@ -243,7 +245,7 @@ class Engine_8Bomb {
 
     _HandleNetwork() {
         if (!this._net_set) { return; }
-        
+
         const rx = network.ServerRecv();
         if (rx !== "") {
             let rxp = {};

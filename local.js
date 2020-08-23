@@ -48,6 +48,7 @@ class Load_LocalPlay {
     Draw() {
         if (!this._active) { return; }
 
+        ui_graphics.lineStyle(0);
         ui_graphics.beginFill(0x000000, this._fade_pc);
         ui_graphics.drawRect(0, 0, WIDTH, HEIGHT);
         ui_graphics.endFill();
@@ -139,6 +140,7 @@ class LocalPlay {
                 if (rxp.spec.good) {
                     this._clientID = rxp.spec.cID;
                     console.log("Given client ID " + this._clientID);
+                    engine_local.timing.timeScale = 1;
                 } else {
                     console.log("FAILED. Connect got good=false.");
                     this._failed = true;
@@ -508,16 +510,23 @@ class Draw_BombSpawner {
 }
 
 class Network {
-    constructor(ip, port) {
-        this._ip = ip;
-        this._port = port;
-        this._addr = "" + ip + ":" + port;
+    constructor(addr) {
+        this._addr = addr;
 
         this._rxQ = [];
 
-        this._ws = new WebSocket("wss://" + this._addr);
-        this._ws.onopen = this._WSOpen;
-        this._ws.onmessage = this._WSRecv;
+        this._ws = new WebSocket(this._addr);
+        let self = this;
+        this._ws.onopen = function (evt) {
+            self._WSOpen(evt);
+        }
+        this._ws.onmessage = function (evt) {
+            self._WSRecv(evt);
+        }
+    }
+
+    Destroy() {
+        this._ws.close();
     }
 
     _WSOpen(evt) {
@@ -525,11 +534,10 @@ class Network {
     }
 
     _WSRecv(evt) {
-        console.log("WS rcv")
-        console.log(evt.data);
+        this._rxQ.push(evt.data);
     }
 
-    Recv() {
+    ClientRecv() {
         if (this._rxQ.length > 0) {
             const r = this._rxQ[0];
             this._rxQ.splice(0, 1);
@@ -538,7 +546,7 @@ class Network {
         return "";
     }
 
-    Send(m) {
+    ClientSend(msg) {
         const msgc = LZUTF8.compress(msg, {outputEncoding:"Base64"});
         this._ws.send(msgc);
     }
