@@ -33,8 +33,9 @@ Shown below is an example (including extra symbols for clarity).
 a: action
     aur: add/update/remove
     cw: clear world
-    str: start world TODO
+    str: start world
     stp: stop world TODO
+    yd: you died
 s: specs (array)
     a: action
         u: update (same as add)
@@ -121,6 +122,8 @@ type:
     8B: game messages for 8Bomb
 resID: response (request) ID - ALWAYS resID for server -> client
 spec:
+    open-response: when a client "opens" a connection - triggered by websocket
+        cID: client id for new connection - to be used in the future for ALL
     pong:
         reqID: request ID being referenced, must match
         tsent: time sent from ping message

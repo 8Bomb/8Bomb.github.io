@@ -76,27 +76,9 @@ class LocalPlay {
 
         this._ping = -1;
         this._connected = false;
+        this._checked = false;
 
         this._clientID = -1;
-
-        // Whie loading, make a ping request.
-        network.ClientSend(JSON.stringify({
-            type: "ping",
-            reqID: GenRequestID(6),
-            spec: {
-                tsent: window.performance.now(),
-            },
-        }));
-
-        // While loading, make a connection request.
-        network.ClientSend(JSON.stringify({
-            type: "check",
-            reqID: GenRequestID(6),
-            spec: {
-                game: "8Bomb",
-                version: "0.1",
-            },
-        }));
     }
 
     _ClearWorld() {
@@ -122,6 +104,30 @@ class LocalPlay {
                 const now = window.performance.now();
                 this._ping = now - parseFloat(rxp.spec.tsent);
                 console.log("ping: " + Sigs(this._ping) + " ms");
+            } else if (rxp.type === "open-response") {
+                this._clientID = rxp.spec.cID;
+                console.log("Given client ID " + this._clientID);
+
+                // Whie loading, make a ping request.
+                network.ClientSend(JSON.stringify({
+                    type: "ping",
+                    reqID: GenRequestID(6),
+                    spec: {
+                        tsent: Sigs(window.performance.now()),
+                        cID: this._clientID,
+                    },
+                }));
+        
+                // While loading, make a connection request.
+                network.ClientSend(JSON.stringify({
+                    type: "check",
+                    reqID: GenRequestID(6),
+                    spec: {
+                        game: "8Bomb",
+                        version: "0.1",
+                        cID: this._clientID,
+                    },
+                }));
             } else if (rxp.type === "check-response") {
                 if (rxp.spec.good) {
                     this._checked = true;
@@ -129,7 +135,9 @@ class LocalPlay {
                     network.ClientSend(JSON.stringify({
                         type: "connect",
                         reqID: GenRequestID(6),
-                        spec: {},
+                        spec: {
+                            cID: this._clientID,
+                        },
                     }));
                 } else {
                     console.log("FAILED. Check got good=false.");
@@ -138,9 +146,14 @@ class LocalPlay {
                 }
             } else if (rxp.type === "connect-response") {
                 if (rxp.spec.good) {
-                    this._clientID = rxp.spec.cID;
-                    console.log("Given client ID " + this._clientID);
-                    engine_local.timing.timeScale = 1;
+                    console.log("Got good connection to server");
+                    console.log("color: " + rxp.spec.color);
+
+                    this._debug_text = new PIXI.Text("your color",
+                        {fontFamily:"monospace", fontSize:50, fill:rxp.spec.color, align:"left", fontWeight:"bold"});
+                    this._debug_text.position.set(20, 30);
+                    this._debug_text.anchor.set(0, 0.5);
+                    ui.addChild(this._debug_text);
                 } else {
                     console.log("FAILED. Connect got good=false.");
                     this._failed = true;
@@ -161,9 +174,9 @@ class LocalPlay {
                                 } else if (o.t === "g") {
                                     this._objs[o.i] = new Draw_GroundElement(o.s.x, o.s.y, o.s.w, o.s.h);
                                 } else if (o.t === "b") {
-                                    this._objs[o.i] = new Draw_Bomb(o.s.x, o.s.y, o.s.r);
+                                    this._objs[o.i] = new Draw_Bomb(o.s.x, o.s.y, o.s.r, o.s.c);
                                 } else if (o.t === "u") {
-                                    this._objs[o.i] = new Draw_UserBall(o.s.x, o.s.y, o.s.r);
+                                    this._objs[o.i] = new Draw_UserBall(o.s.x, o.s.y, o.s.r, o.s.c);
                                 } else if (o.t === "bs") {
                                     this._objs[o.i] = new Draw_BombSpawner();
                                 } else if (o.t === "m") {
@@ -191,6 +204,18 @@ class LocalPlay {
                     }
                 } else if (rxp.spec.a === "cw") {
                     this._ClearWorld();
+                } else if (rxp.spec.a === "str") {
+                    // engine_local.timing.timeScale = 1;
+                } else if (rxp.spec.a === "yd") {
+                    console.log("DIED");
+                    this._died_text = new PIXI.Text("WASTED",
+                        {fontFamily:"monospace", fontSize:80, fill:0xff3333, align:"center", fontWeight:"bold"});
+                    this._died_text.position.set(WIDTH/2, HEIGHT/2);
+                    this._died_text.anchor.set(0.5);
+                    ui.addChild(this._died_text);
+
+                    // TODO: probably not the best way to remove.
+                    this._objs[rxp.spec.i].Destroy();
                 }
             } else {
                 console.log("Client couldn't handle " + rxp.type);
@@ -199,6 +224,8 @@ class LocalPlay {
     }
 
     Start() {
+        this._connected = true;
+        /* DEBUG - starting from scratch
         network.ClientSend(JSON.stringify({
             type: "admin",
             reqID: GenRequestID(6),
@@ -225,9 +252,11 @@ class LocalPlay {
                 action: "start",
             },
         }));
+        */
     }
 
     Stop() {
+        return;
         network.ClientSend(JSON.stringify({
             type: "admin",
             reqID: GenRequestID(6),
@@ -272,6 +301,8 @@ class LocalPlay {
             stage_actions.push("connect failed");
             return;
         }
+
+        if (!this._connected) { return; }
 
         network.ClientSend(JSON.stringify({
             type: "input",
@@ -365,10 +396,11 @@ class Draw_GroundElement {
 }
 
 class Draw_UserBall {
-    constructor(x, y, r) {
+    constructor(x, y, r, c) {
         this.x = x;
         this.y = y;
         this.radius = r;
+        this.color = PIXI.utils.string2hex(c);
         
         this._body = Bodies.circle(this.x, this.y, this.radius, 12);
         this._body.restitution = 0.5;
@@ -395,17 +427,18 @@ class Draw_UserBall {
 
     Draw() {
         stage_graphics.lineStyle(1, 0xffff00, 1);
-        stage_graphics.beginFill(0xff0000);
+        stage_graphics.beginFill(this.color);
         stage_graphics.drawCircle(this.x, this.y, this.radius);
         stage_graphics.endFill();
     }
 }
 
 class Draw_Bomb {
-    constructor(x, y, r) {
+    constructor(x, y, r, c) {
         this.x = x;
         this.y = y;
         this.radius = r;
+        this.color = c;
 
         this.active = true;
 
@@ -434,7 +467,7 @@ class Draw_Bomb {
     Draw() {
         if (this.active === false) { return; }
 
-        stage_graphics.lineStyle(1, 0x42e3f5, 1);
+        stage_graphics.lineStyle(1, MAP_COLORS[play_opts.map].magma, 1);
         stage_graphics.beginFill(MAP_COLORS[play_opts.map].bomb);
         stage_graphics.drawCircle(this.x, this.y, this.radius);
         stage_graphics.endFill();
@@ -515,6 +548,8 @@ class Network {
 
         this._rxQ = [];
 
+        this._open = false;
+
         this._ws = new WebSocket(this._addr);
         let self = this;
         this._ws.onopen = function (evt) {
@@ -530,7 +565,8 @@ class Network {
     }
 
     _WSOpen(evt) {
-        console.log("WS opened")
+        console.log("WS opened");
+        this._open = true;
     }
 
     _WSRecv(evt) {
@@ -547,6 +583,8 @@ class Network {
     }
 
     ClientSend(msg) {
+        if (!this._open) { return; }
+
         const msgc = LZUTF8.compress(msg, {outputEncoding:"Base64"});
         this._ws.send(msgc);
     }

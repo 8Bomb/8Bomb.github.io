@@ -59,7 +59,7 @@ const Body = Matter.Body;
 
 const matter_engine = Engine.create();
 matter_engine.world.gravity.y = 0.2;
-matter_engine.timing.timeScale = 0;
+//matter_engine.timing.timeScale = 0;
 
 let prevTime = Date.now();
 function Tick() {
@@ -76,6 +76,10 @@ function Tick() {
 
 function Sigs(n, dig=3) {
     return Math.round(n * Math.pow(10, dig)) / 1000;
+}
+
+function RandomColor() {
+	return '#'+(Math.random() * 0xFFFFFF << 0).toString(16).padStart(6, '0');
 }
 
 const ENGINE_WIDTH = 1200;
@@ -112,6 +116,14 @@ class Network {
 		evt.on("message", function (evt) {
 			self.Message(evt);
 		});
+
+		evt.send(LZUTF8.compress(JSON.stringify({
+			type: "open-response",
+			resID: GenRequestID(6),
+			spec: {
+				cID: cid,
+			},
+		}), {outputEncoding:"Base64"}));
 	}
 
 	Close(evt) {
@@ -127,7 +139,7 @@ class Network {
 		const msg = LZUTF8.decompress(evt, {inputEncoding:"Base64"});
 		this._rxQ.push({id:"", data:msg});
 	}
-
+	
     ServerSend(msg, id="") {
 		const msgc = LZUTF8.compress(msg, {outputEncoding:"Base64"});
 		if (id === "") {
@@ -171,7 +183,7 @@ class Engine_8Bomb {
         this._update_period = 100;
         this._update_time = 0;
 
-        this._running = false;
+        this.bomb_spawning = false;
 
         this._net_set = false;
 
@@ -184,7 +196,10 @@ class Engine_8Bomb {
         this._keylen = 5;
 
         this._updates_num = 0;
-        this._updates_timer = 0;
+		this._updates_timer = 0;
+		
+        this._magma = -1;
+        this._bomb_spawner = -1;
 
         this._CreateWorld();
     }
@@ -239,37 +254,42 @@ class Engine_8Bomb {
         } else if (type === "b" || type === "u") {
             specs.s = {
                 x: o.x, y: o.y, r: o.radius,
-                vx: o.vx, vy: o.vy, va: o.va,
+				vx: o.vx, vy: o.vy, va: o.va,
+				c: o.color,
             }
         }
         return specs;
     }
 
     _InitClient(id, cid) {
-        network.ServerSend(JSON.stringify({
-            type: "8B",
-            resID: GenRequestID(6),
-            spec: {
-                a: "cw"
-            },
-        }));
+		if (cid !== "" ) {
+			network.ServerSend(JSON.stringify({
+				type: "8B",
+				resID: GenRequestID(6),
+				spec: {
+					a: "cw"
+				},
+			}), cid);
 
-        let msg_8B = {
-            a: "aur",
-            s: [],
-        };
-        for (let k in this._objs) {
-            const res = this._AddObjToSpec(k);
-            if (res !== null) {
-                msg_8B.s.push(res);
-            }
-        }
+			let msg_8B = {
+				a: "aur",
+				s: [],
+			};
+			for (let k in this._objs) {
+				const res = this._AddObjToSpec(k);
+				if (res !== null) {
+					msg_8B.s.push(res);
+				}
+			}
 
-        network.ServerSend(JSON.stringify({
-            type: "8B",
-            resID: GenRequestID(6),
-            spec: msg_8B,
-        }));
+			network.ServerSend(JSON.stringify({
+				type: "8B",
+				resID: GenRequestID(6),
+				spec: msg_8B,
+			}), cid);
+		} else {
+			console.log("TODO: send init to all clients.");
+		}
     }
 
     _UpdateClient() {
@@ -316,14 +336,23 @@ class Engine_8Bomb {
 
     Start() {
         console.log("ADMIN: starting engine.");
-        matter_engine.timing.timeScale = 1;
-        this._running = true;
+		//matter_engine.timing.timeScale = 1;
+		this.bomb_spawning = true;
+
+		// Send start signal to all clients.
+		network.ServerSend(JSON.stringify({
+			type: "8B",
+			resID: GenRequestID(6),
+			spec: {
+				a: "str",
+			}
+		}));
     }
 
     Stop() {
         console.log("ADMIN: stopping engine.");
-        matter_engine.timing.timeScale = 0;
-        this._running = false;
+        // matter_engine.timing.timeScale = 0;
+		this.bomb_spawning = true;
 	}
 	
 	NetSet() {
@@ -333,7 +362,14 @@ class Engine_8Bomb {
     AddBomb(x, y, r, t) {
         const id = this._NewID(this._keylen);
         this._objs[id] = new Bomb(x, y, r, t);
-    }
+	}
+	
+	Magma() {
+		if (this._magma !== -1) {
+			return this._objs[this._magma];
+		}
+		return null;
+	}
 
     // Set gravity to certain level
     // @param type: one of 0, 1, 2
@@ -369,7 +405,7 @@ class Engine_8Bomb {
 							reqID: rxp.reqID,
 							tsent: rxp.spec.tsent,
 						},
-					}));
+					}), rxp.spec.cID);
 				} else if (rxp.type === "check") {
 					if (rxp.spec.game === "8Bomb" && rxp.spec.version === "0.1") {
 						network.ServerSend(JSON.stringify({
@@ -379,7 +415,7 @@ class Engine_8Bomb {
 								reqID: rxp.reqID,
 								good: true,
 							}
-						}));
+						}), rxp.spec.cID);
 					} else {
 						console.log("Server got a check with bad game or version");
 						network.ServerSend(JSON.stringify({
@@ -389,28 +425,32 @@ class Engine_8Bomb {
 								reqID: rxp.reqID,
 								good: false,
 							}
-						}));
+						}), rxp.spec.cID);
 					}
 				} else if (rxp.type === "connect") {
+					console.log("DEBUG: got connect message");
 					// TODO: this probably needs some auth, eh?
-					const cid = GenRequestID(8);
-					console.log("Providing a new client id " + cid);
+					const cid = rxp.spec.cID;
+					
+					// generate a user ball upon connect.
+					if (cid in this._clients) {
+						console.log("TODO: got a duplicated connect?");
+					}
+					let id = this._NewID(this._keylen);
+					this._objs[id] = new UserBall(0, -ENGINE_HEIGHT/2);
+					this._clients[cid] = {
+						id: id,
+					};
+
 					network.ServerSend(JSON.stringify({
 						type: "connect-response",
 						resID: GenRequestID(6),
 						spec: {
 							reqID: rxp.reqID,
 							good: true,
-							cID: cid,
+							color: this._objs[id].color,
 						}
-					}));
-					
-					// generate a user ball upon connect.
-					let id = this._NewID(this._keylen);
-					this._objs[id] = new UserBall(0, -ENGINE_HEIGHT/2);
-					this._clients[cid] = {
-						id: id,
-					};
+					}), cid);
 
 					console.log("ENGINE adding new user ball");
 
@@ -433,6 +473,9 @@ class Engine_8Bomb {
 					if (rxp.spec.key === "F2" && rxp.spec.down === true) {
 						console.log("DEBUG: got f2 special code");
 						// TODO: reset the lobby, basically
+					} else if (rxp.spec.key === "/" && rxp.spec.down === true) {
+						console.log("DEBUG: got / special code");
+						this.Start();
 					}
 					this._objs[this._clients[rxp.spec.cID].id].Key(rxp.spec.key, rxp.spec.down);
 				} else {
@@ -445,15 +488,32 @@ class Engine_8Bomb {
     Tick(dT) {
         this._HandleNetwork();
 
-        if (!this._running) { return; }
-
         for (let k in this._objs) {
-            const o = this._objs[k];
+			const o = this._objs[k];
+			let wasactive = o.active;
             o.Tick(dT);
 
-            if (o.active === false) {
-                this._rmQ.push(k);
-            }
+            if (wasactive && o.active === false) {
+				if (o.type === "u") {
+					// TODO: better way
+					o.Destroy();
+					
+					for (let c in this._clients) {
+						if (this._clients[c].id === k) {
+							network.ServerSend(JSON.stringify({
+								type: "8B",
+								resID: GenRequestID(6),
+								spec: {
+									a: "yd",
+									i: k,
+								},
+							}), c);
+						}
+					}
+				} else {
+					this._rmQ.push(k);
+				}
+			}
         }
 
         // See if clients need updated.
@@ -485,9 +545,6 @@ class Engine_8Bomb {
             for (let k in this._objs) {
                 const o = this._objs[k];
                 if (o.type !== "g") { continue; }
-
-                // NOTE
-                // perhaps this adds way more than 2 ground elemnts on each bomb?
 
                 if (o.WithinXBounds(xp)) {
                     // If bomb explosion bottom reaches past top of elem.
@@ -621,7 +678,10 @@ class UserBall {
         this.radius = 8;
         this.vx = 0;
         this.vy = 0;
-        this.va = 0;
+		this.va = 0;
+		
+		// TODO: better colors.
+		this.color = RandomColor();
 
         this._falling = true;
         
@@ -666,7 +726,7 @@ class UserBall {
     }
 
     Tick(dT) {
-        if (!this.active) { return; }
+		if (!this.active) { return; }
 
         const grounded = engine.Collides(this._body);
 
@@ -705,7 +765,14 @@ class UserBall {
         this.y = Sigs(this._body.position.y);
         this.vx = Sigs(this._body.velocity.x);
         this.vy = Sigs(this._body.velocity.y);
-        this.va = Sigs(this._body.angularVelocity);
+		this.va = Sigs(this._body.angularVelocity);
+
+		if (this.y > ENGINE_HEIGHT) {
+			this.active = false;
+		}
+		if (engine.Magma().Contains(this.x, this.y)) {
+			this.active = false;
+		}
     }
 }
 
@@ -716,7 +783,8 @@ class Bomb {
         this.radius = r;
         this.vx = 0;
         this.vy = 0;
-        this.va = 0;
+		this.va = 0;
+		this.color = 0;
 
         if (this.radius < 4) {
             this._color = 0xf5ce42;
@@ -794,6 +862,8 @@ class BombSpawner {
     Destroy() {}
 
     Tick(dT) {
+		if (!engine.bomb_spawning) { return; }
+
         if (Math.random() < this._spawn_chance) {
             this._spawn_chance = this._spawn_chance_starting;
             engine.AddBomb(this.left + this.width * Math.random(), this.y, 4+Math.random()*6, 3000 + 3000*Math.random());
