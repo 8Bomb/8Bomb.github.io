@@ -62,10 +62,20 @@ matter_engine.world.gravity.y = 0.2;
 //matter_engine.timing.timeScale = 0;
 
 let prevTime = Date.now();
+let tick_timer = 0;
+let tick_frames = 0;
 function Tick() {
 	let now = Date.now();
 	let dT = now - prevTime;
 	prevTime = now;
+
+    tick_timer += dT;
+    tick_frames++;
+    if (tick_timer > 3000) {
+        console.log("fps: " + Sigs(tick_frames / tick_timer * 1000));
+        tick_timer = 0;
+        tick_frames = 0;
+    }
 
 	Engine.update(matter_engine, dT);
 
