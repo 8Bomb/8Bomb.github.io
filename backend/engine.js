@@ -7,10 +7,13 @@ const World = Matter.World;
 const Bodies = Matter.Bodies;
 const Body = Matter.Body;
 
-engine = Engine.create();
+const engine = Engine.create();
 engine.world.gravity.y = 0.2;
 engine.timing.timeScale = 0;
 Engine.run(engine);
+
+const ENGINE_WIDTH = 1200;
+const ENGINE_HEIGHT = Math.round(ENGINE_WIDTH*9/16);
 
 class LocalNetworkEmulator {
     constructor() {
@@ -53,11 +56,11 @@ class Engine_8Bomb {
         this._objs = {};
         
         this._ge_wid = 2;
-        this._ground_wid = WIDTH / this._ge_wid;
-        this._ground_height = -HEIGHT/2 + 300;
-        this._ground_dist_to_bot = HEIGHT/2 - this._ground_height;
+        this._ground_wid = ENGINE_WIDTH / this._ge_wid;
+        this._ground_height = -ENGINE_HEIGHT/2 + 300;
+        this._ground_dist_to_bot = ENGINE_HEIGHT/2 - this._ground_height;
 
-        this._clientIDs = [];
+        this._clients = {};
 
         this._tasks = [];
 
@@ -83,29 +86,25 @@ class Engine_8Bomb {
     _CreateWorld() {
         console.log("ENGINE creating new world.");
 
-        let id = this._NewID(this._keylen);
         for (let i = 0; i < this._ground_wid; i++) {
-            id = this._NewID(this._keylen);
-            this._objs[id] = new GroundElement(-WIDTH/2 + this._ge_wid*i, this._ground_height, this._ge_wid, this._ground_dist_to_bot);
+            this._objs[this._NewID(this._keylen)] = new GroundElement(-ENGINE_WIDTH/2 + this._ge_wid*i, this._ground_height, this._ge_wid, this._ground_dist_to_bot);
         }
 
         // Bomb spawner.
-        id = this._NewID(this._keylen);
-        this._bomb_spawner = id;
-        this._objs[id] = new BombSpawner(0, -HEIGHT/2 - 20, WIDTH - 40);
+        this._bomb_spawner = this._NewID(this._keylen);
+        this._objs[this._bomb_spawner] = new BombSpawner(0, -ENGINE_HEIGHT/2 - 20, ENGINE_WIDTH - 40);
         
         // Magma.
-        id = this._NewID(this._keylen);
-        this._magma = id;
-        this._objs[id] = new Magma(0, HEIGHT/2 - 40, WIDTH, 80);
+        this._magma = this._NewID(this._keylen);
+        this._objs[this._magma] = new Magma(0, ENGINE_HEIGHT/2 - 40, ENGINE_WIDTH, 80);
         
         // Left wall.
-        id = this._NewID(this._keylen);
-        this._objs[id] = new Wall(-WIDTH/2 - 20, -HEIGHT/2, 40, HEIGHT);
+        this._objs[this._NewID(this._keylen)] = new Wall(-ENGINE_WIDTH/2 - 20, -ENGINE_HEIGHT/2, 40, ENGINE_HEIGHT);
 
         // Right wall.
-        id = this._NewID(this._keylen);
-        this._objs[id] = new Wall(WIDTH/2 - 20, -HEIGHT/2, 40, HEIGHT);
+        this._objs[this._NewID(this._keylen)] = new Wall(ENGINE_WIDTH/2 - 20, -ENGINE_HEIGHT/2, 40, ENGINE_HEIGHT);
+
+        this._objs[this._NewID(this._keylen)] = new UserBall(-ENGINE_WIDTH/3, -ENGINE_HEIGHT/2);
     }
 
     _NewID(n) {
@@ -135,9 +134,8 @@ class Engine_8Bomb {
             };
         } else if (type === "b" || type === "u") {
             specs.s = {
-                x: o.x,
-                y: o.y,
-                r: o.radius,
+                x: o.x, y: o.y, r: o.radius,
+                vx: o.vx, vy: o.vy, va: o.va,
             }
         }
         return specs;
@@ -181,15 +179,7 @@ class Engine_8Bomb {
 
             if (o.type !== "b" && o.type !== "u") { continue; }
 
-            msg_8B.s.push({
-                a: "u",
-                i: k,
-                t: o.type,
-                s: {
-                    x: o.x, y: o.y, r:o.radius,
-                    vx: o.vx, vy: o.vy,
-                },
-            });
+            msg_8B.s.push(this._AddObjToSpec(k));
         }
 
         while (this._rmQ.length > 0) {
@@ -302,11 +292,13 @@ class Engine_8Bomb {
                         cID: cid,
                     }
                 }));
-                this._clientIDs.push(cid);
                 
                 // generate a user ball upon connect.
                 let id = this._NewID(this._keylen);
-                this._objs[id] = new UserBall(0, -HEIGHT/2);
+                this._objs[id] = new UserBall(0, -ENGINE_HEIGHT/2);
+                this._clients[cid] = {
+                    id: id,
+                };
 
                 console.log("ENGINE adding new user ball");
 
@@ -325,6 +317,8 @@ class Engine_8Bomb {
                 } else {
                     console.log("Couldn't handle admin action " + rxp.spec.action);
                 }
+            } else if (rxp.type === "input") {
+                this._objs[this._clients[rxp.spec.cID].id].Key(rxp.spec.key, rxp.spec.down);
             } else {
                 console.log("Server couldn't handle " + rxp.type);
             }
@@ -510,6 +504,7 @@ class UserBall {
         this.radius = 8;
         this.vx = 0;
         this.vy = 0;
+        this.va = 0;
 
         this._falling = true;
         
@@ -528,6 +523,10 @@ class UserBall {
         this.type = "u";
 
         this._keys = {w:false, a:false, s:false, d:false};
+    }
+
+    Key(k, d) {
+        this._keys[k] = d;
     }
 
     Destroy() {
@@ -585,10 +584,11 @@ class UserBall {
             Matter.Body.setAngularVelocity(this._body, Math.sign(this._body.angularVelocity));
         }
 
-        this.x = this._body.position.x;
-        this.y = this._body.position.y;
-        this.vx = this._body.velocity.x;
-        this.vy = this._body.velocity.y;
+        this.x = Sigs(this._body.position.x);
+        this.y = Sigs(this._body.position.y);
+        this.vx = Sigs(this._body.velocity.x);
+        this.vy = Sigs(this._body.velocity.y);
+        this.va = Sigs(this._body.angularVelocity);
     }
 }
 
@@ -599,6 +599,7 @@ class Bomb {
         this.radius = r;
         this.vx = 0;
         this.vy = 0;
+        this.va = 0;
 
         if (this.radius < 4) {
             this._color = 0xf5ce42;
@@ -633,10 +634,11 @@ class Bomb {
             this.Destroy();
         }
 
-        this.x = this._body.position.x;
-        this.y = this._body.position.y;
-        this.vx = this._body.velocity.x;
-        this.vy = this._body.velocity.y;
+        this.x = Sigs(this._body.position.x);
+        this.y = Sigs(this._body.position.y);
+        this.vx = Sigs(this._body.velocity.x);
+        this.vy = Sigs(this._body.velocity.y);
+        this.va = Sigs(this._body.angularVelocity);
     }
 
     Destroy() {

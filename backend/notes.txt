@@ -78,6 +78,7 @@ type:
     connect: client wants to connect
     vote: client casts a vote
     admin: client takes an admin action
+    input: client provides some input
 reqID: request ID (4 char request)
 spec: specifications
     ping:
@@ -93,6 +94,11 @@ spec: specifications
             stop
     admin:
         TODO
+    input:
+        cID: client ID
+        type: usually "key"
+        key: key in string format
+        down: true of false
 
 ---------------------------------------------------------------------------------------------------
 SERVER -> CLIENT

@@ -80,20 +80,20 @@ class LocalPlay {
 
         // Whie loading, make a ping request.
         network.ClientSend(JSON.stringify({
-            "type": "ping",
-            "reqID": GenRequestID(6),
-            "spec": {
-                "tsent": window.performance.now(),
+            type: "ping",
+            reqID: GenRequestID(6),
+            spec: {
+                tsent: window.performance.now(),
             },
         }));
 
         // While loading, make a connection request.
         network.ClientSend(JSON.stringify({
-            "type": "check",
-            "reqID": GenRequestID(6),
-            "spec": {
-                "game": "8Bomb",
-                "version": "0.1",
+            type: "check",
+            reqID: GenRequestID(6),
+            spec: {
+                game: "8Bomb",
+                version: "0.1",
             },
         }));
     }
@@ -120,15 +120,15 @@ class LocalPlay {
             if (rxp.type === "pong") {
                 const now = window.performance.now();
                 this._ping = now - parseFloat(rxp.spec.tsent);
-                console.log("ping: " + this._ping + " ms");
+                console.log("ping: " + Sigs(this._ping) + " ms");
             } else if (rxp.type === "check-response") {
                 if (rxp.spec.good) {
                     this._checked = true;
 
                     network.ClientSend(JSON.stringify({
-                        "type": "connect",
-                        "reqID": GenRequestID(6),
-                        "spec": {},
+                        type: "connect",
+                        reqID: GenRequestID(6),
+                        spec: {},
                     }));
                 } else {
                     console.log("FAILED. Check got good=false.");
@@ -173,7 +173,7 @@ class LocalPlay {
                             if (o.t === "w" || o.t === "g" || o.t === "m") {
                                 this._objs[o.i].Update(o.s.x, o.s.y);
                             } else if (o.t === "b" || o.t === "u") {
-                                this._objs[o.i].Update(o.s.x, o.s.y, o.s.vx, o.s.vy);
+                                this._objs[o.i].Update(o.s.x, o.s.y, o.s.vx, o.s.vy, o.s.va);
                             }
                         } else if (o.a === "r") {
                             if (o.i in this._objs) {
@@ -198,46 +198,46 @@ class LocalPlay {
 
     Start() {
         network.ClientSend(JSON.stringify({
-            "type": "admin",
-            "reqID": GenRequestID(6),
-            "spec": {
-                "action": "destroy",
+            type: "admin",
+            reqID: GenRequestID(6),
+            spec: {
+                action: "destroy",
             },
         }));
         network.ClientSend(JSON.stringify({
-            "type": "admin",
-            "reqID": GenRequestID(6),
-            "spec": {
-                "action": "create",
+            type: "admin",
+            reqID: GenRequestID(6),
+            spec: {
+                action: "create",
             },
         }));
         network.ClientSend(JSON.stringify({
-            "type": "connect",
-            "reqID": GenRequestID(6),
-            "spec": {},
+            type: "connect",
+            reqID: GenRequestID(6),
+            spec: {},
         }));
         network.ClientSend(JSON.stringify({
-            "type": "admin",
-            "reqID": GenRequestID(6),
-            "spec": {
-                "action": "start",
+            type: "admin",
+            reqID: GenRequestID(6),
+            spec: {
+                action: "start",
             },
         }));
     }
 
     Stop() {
         network.ClientSend(JSON.stringify({
-            "type": "admin",
-            "reqID": GenRequestID(6),
-            "spec": {
-                "action": "stop",
+            type: "admin",
+            reqID: GenRequestID(6),
+            spec: {
+                action: "stop",
             },
         }));
         network.ClientSend(JSON.stringify({
-            "type": "admin",
-            "reqID": GenRequestID(6),
-            "spec": {
-                "action": "destroy",
+            type: "admin",
+            reqID: GenRequestID(6),
+            spec: {
+                action: "destroy",
             },
         }));
     }
@@ -248,6 +248,10 @@ class LocalPlay {
 
     Tick(dT) {
         this._HandleNetwork();
+
+        for (let k in this._objs) {
+            this._objs[k].Tick(dT);
+        }
     }
 
     Loaded() {
@@ -264,7 +268,19 @@ class LocalPlay {
         // DEBUG
         if (k === "Escape") {
             stage_actions.push("connect failed");
+            return;
         }
+
+        network.ClientSend(JSON.stringify({
+            type: "input",
+            reqID: GenRequestID(6),
+            spec: {
+                cID: this._clientID,
+                type: "key",
+                key: k,
+                down: d,
+            }
+        }));
     }
 
     Draw() {
@@ -291,6 +307,8 @@ class Draw_Wall {
 
         World.add(engine_local.world, [this._body]);
     }
+
+    Tick(dT) {}
 
     Destroy() {
         World.remove(engine_local.world, [this._body]);
@@ -325,6 +343,8 @@ class Draw_GroundElement {
         World.add(engine_local.world, [this._body]);
     }
 
+    Tick(dT) {}
+
     Destroy() {
         World.remove(engine_local.world, [this._body]);
     }
@@ -358,14 +378,18 @@ class Draw_UserBall {
         World.remove(engine_local.world, [this._body]);
     }
 
-    Update(x, y, vx, vy) {
+    Update(x, y, vx, vy, va) {
         this.x = x;
         this.y = y;
         Body.setPosition(this._body, {x:x, y:y});
         Body.setVelocity(this._body, {x:vx, y:vy});
+        Body.setAngularVelocity(this._body, va);
     }
 
-    Tick(dT) {}
+    Tick(dT) {
+        this.x = this._body.position.x;
+        this.y = this._body.position.y;
+    }
 
     Draw() {
         stage_graphics.lineStyle(1, 0xffff00, 1);
@@ -392,14 +416,18 @@ class Draw_Bomb {
         World.remove(engine_local.world, [this._body]);
     }
     
-    Update(x, y, vx, vy) {
+    Update(x, y, vx, vy, va) {
         this.x = x;
         this.y = y;
         Body.setPosition(this._body, {x:x, y:y});
         Body.setVelocity(this._body, {x:vx, y:vy});
+        Body.setAngularVelocity(this._body, va);
     }
 
-    Tick(dT) {}
+    Tick(dT) {
+        this.x = this._body.position.x;
+        this.y = this._body.position.y;
+    }
 
     Draw() {
         if (this.active === false) { return; }

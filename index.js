@@ -71,13 +71,13 @@ let updates_timer = 0;
 
 function Tick() {
     let now = window.performance.now();
-    let dT = Math.round((now - prev_tick) * 1000) / 1000;
+    let dT = Sigs(now - prev_tick);
     prev_tick = now;
 
     updates_num++;
     updates_timer += dT;
     if (updates_timer > 3000) {
-        const fps = Math.round(updates_num / updates_timer * 1000);
+        const fps = Sigs(updates_num / updates_timer) * 1000;
         console.log("fps: " + fps);
         updates_num = 0;
         updates_timer = 0;
@@ -117,7 +117,7 @@ const viewport = new Viewport.Viewport({
 app.stage.addChild(viewport);
 
 viewport
-    .drag({mouseButtons: "right"})
+//    .drag({mouseButtons: "right"})
     .pinch()
     .decelerate()
     .wheel();
@@ -262,6 +262,10 @@ function UpdateColorScheme(c) {
 
 function DarkenColor(c) {
     return (c & 0xfefefe) >> 1;
+}
+
+function Sigs(n, dig=3) {
+    return Math.round(n * Math.pow(10, dig)) / 1000;
 }
 
 // Functions //////////////////////////////////////////////////////////////////////////////////////
