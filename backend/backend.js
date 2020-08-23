@@ -14,7 +14,7 @@ try {
 		console.log("Running on the www.");
 		LOCAL = false;
 	}
-} catch {
+} catch (err) {
 	console.log("ERR. Caught an err with existsSync.");
 }
 
@@ -356,7 +356,7 @@ class Engine_8Bomb {
 				let rxp = {};
 				try {
 					rxp = JSON.parse(rx);
-				} catch {
+				} catch (err) {
 					console.log("ERR. Could not parse rx message in client.");
 					return;
 				}
