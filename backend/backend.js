@@ -37,7 +37,7 @@ if (!LOCAL) {
 } else {
 	server = http.createServer(app);
 }
-server.listen(5030);
+server.listen(5060);
 
 const wss = new SocketServer({ server : server });
 
@@ -291,8 +291,8 @@ class Engine_8Bomb {
         } else if (type === "b" || type === "u") {
             specs.s = {
                 x: o.x, y: o.y, r: o.radius,
-				vx: o.vx, vy: o.vy, va: o.va,
-				c: o.color,
+                vx: o.vx, vy: o.vy, va: o.va,
+                a: o.angle, c: o.color,
             }
         }
         return specs;
@@ -715,7 +715,8 @@ class UserBall {
         this.radius = 8;
         this.vx = 0;
         this.vy = 0;
-		this.va = 0;
+        this.va = 0;
+        this.angle = 0;
 		
 		// TODO: better colors.
 		this.color = RandomColor();
@@ -802,7 +803,8 @@ class UserBall {
         this.y = Sigs(this._body.position.y);
         this.vx = Sigs(this._body.velocity.x);
         this.vy = Sigs(this._body.velocity.y);
-		this.va = Sigs(this._body.angularVelocity);
+        this.va = Sigs(this._body.angularVelocity);
+        this.angle = Sigs(this._body.angle);
 
 		if (this.y > ENGINE_HEIGHT) {
 			this.active = false;

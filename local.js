@@ -48,19 +48,19 @@ class Load_LocalPlay {
     Draw() {
         if (!this._active) { return; }
 
-        ui_graphics.lineStyle(0);
-        ui_graphics.beginFill(0x000000, this._fade_pc);
-        ui_graphics.drawRect(0, 0, WIDTH, HEIGHT);
-        ui_graphics.endFill();
+        ui_graphics_1.lineStyle(0);
+        ui_graphics_1.beginFill(0x000000, this._fade_pc);
+        ui_graphics_1.drawRect(0, 0, WIDTH, HEIGHT);
+        ui_graphics_1.endFill();
 
-        ui_graphics.beginFill(color_scheme.title, this._fade_pc**4);
-        ui_graphics.drawCircle(WIDTH/2, HEIGHT/2, 50);
-        ui_graphics.endFill();
+        ui_graphics_1.beginFill(color_scheme.title, this._fade_pc**4);
+        ui_graphics_1.drawCircle(WIDTH/2, HEIGHT/2, 50);
+        ui_graphics_1.endFill();
 
-        ui_graphics.lineStyle(20, color_scheme.text, this._fade_pc**4);
+        ui_graphics_1.lineStyle(20, color_scheme.text, this._fade_pc**4);
         const v0 = Math.max(this._arcval, this._arcval2);
         const v1 = Math.min(this._arcval, this._arcval2);
-        ui_graphics.arc(WIDTH/2, HEIGHT/2, 50, v0, v1, true);
+        ui_graphics_1.arc(WIDTH/2, HEIGHT/2, 50, v0, v1, true);
     }
 }
 
@@ -107,10 +107,10 @@ class UI_Online {
     Draw() {
         if (this._fade <= 0) { return; }
 
-        ui_graphics.lineStyle(0);
-        ui_graphics.beginFill(0x000000, this._fade);
-        ui_graphics.drawRect(0, 0, WIDTH, HEIGHT);
-        ui_graphics.endFill();
+        ui_graphics_1.lineStyle(0);
+        ui_graphics_1.beginFill(0x000000, this._fade);
+        ui_graphics_1.drawRect(0, 0, WIDTH, HEIGHT);
+        ui_graphics_1.endFill();
     }
 }
 
@@ -119,7 +119,6 @@ class LocalPlay {
         app.renderer.backgroundColor = MAP_COLORS[play_opts.map].bg;
         this._loading = true;
 
-        this._ids = [];
         this._objs = {};
 
         this._rxStr = "";
@@ -128,17 +127,33 @@ class LocalPlay {
         this._ping_timer = 0;
         this._connected = false;
         this._checked = false;
+        this._loaded = false;
 
         this._clientID = -1;
 
         this._ui = new UI_Online();
+        
+        const loader = new PIXI.Loader(); // you can also create your own if you want
+        
+        // Chainable `add` to enqueue a resource
+        loader.add("balls", "gfx/ball_spritesheet.png");
+        
+        loader.load((loader, resources) => {
+            textures_cache.ball_sprites = new PIXI.Texture(resources.balls.texture);
+        });
+        
+        let self = this;
+        loader.onComplete.add(function () {
+            self._loaded = true;
+        });
+        this._ids_to_apply_tex = [];
     }
 
     _ClearWorld() {
-        while (this._ids.length > 0) {
-            this._objs[this._ids[0]].Destroy();
-            delete this._objs[this._ids[0]];
-            this._ids.splice(0, 1);
+        console.log("Manually cleared world. TODO is this necessary?");
+        for (let k in this._objs) {
+            this._objs[k].Destroy();
+            delete this._objs[k];
         }
     }
 
@@ -203,6 +218,7 @@ class LocalPlay {
                     if (rxp.spec.good) {
                         console.log("Got good connection to server");
                         //console.log("color: " + rxp.spec.color);
+                        this._connected = true;
 
                         this._debug_text = new PIXI.Text("your color",
                             {fontFamily:"monospace", fontSize:50, fill:rxp.spec.color, align:"left", fontWeight:"bold"});
@@ -223,7 +239,6 @@ class LocalPlay {
                             //console.log(rxp.spec);
                             if (o.a === "u") {
                                 if (!(o.i in this._objs)) {
-                                    this._ids.push(o.i);
                                     if (o.t === "w") {
                                         this._objs[o.i] = new Draw_Wall(o.s.x, o.s.y, o.s.w, o.s.h);
                                     } else if (o.t === "g") {
@@ -237,22 +252,22 @@ class LocalPlay {
                                     } else if (o.t === "m") {
                                         this._objs[o.i] = new Draw_Magma(o.s.x, o.s.y, o.s.w, o.s.h);
                                     }
+                                    this._ids_to_apply_tex.push(o.i);
+                                } else {
                                 }
                                 
                                 // Update all objects.
                                 if (o.t === "w" || o.t === "g" || o.t === "m") {
                                     this._objs[o.i].Update(o.s.x, o.s.y);
                                 } else if (o.t === "b" || o.t === "u") {
-                                    this._objs[o.i].Update(o.s.x, o.s.y, o.s.vx, o.s.vy, o.s.va);
+                                    this._objs[o.i].Update(o.s.x, o.s.y, o.s.vx, o.s.vy, o.s.va, o.s.a);
                                 }
                             } else if (o.a === "r") {
                                 if (o.i in this._objs) {
                                     this._objs[o.i].Destroy();
-                                    this._ids.splice(this._ids.indexOf(o.i), 1);
                                     delete this._objs[o.i];
                                 } else {
-                                    //console.log("TODO: this should never appear???");
-                                    //console.log("idx: " + this._ids.indexOf(o.i));
+                                    console.log("TODO: this should never appear???");
                                     lost += "" + o.i + ",";
                                 }
                             }
@@ -280,7 +295,6 @@ class LocalPlay {
     }
 
     Start() {
-        this._connected = true;
         /* DEBUG - starting from scratch
         network.ClientSend(JSON.stringify({
             type: "admin",
@@ -337,6 +351,13 @@ class LocalPlay {
     Tick(dT) {
         this._HandleNetwork();
 
+        if (this._loaded) {
+            while (this._ids_to_apply_tex.length > 0) {
+                this._objs[this._ids_to_apply_tex[0]].ApplyTexture();
+                this._ids_to_apply_tex.splice(0, 1);
+            }
+        }
+
         for (let k in this._objs) {
             this._objs[k].Tick(dT);
         }
@@ -359,7 +380,7 @@ class LocalPlay {
     }
 
     Loaded() {
-        return this._ping !== -1 && this._checked;
+        return this._ping !== -1 && this._connected && this._loaded;
     }
 
     MouseMove(x, y) {}
@@ -393,10 +414,8 @@ class LocalPlay {
     }
 
     Draw() {
-        for (let i = 0; i < this._ids.length; i++) {
-            if (this._ids[i] in this._objs) {
-                this._objs[this._ids[i]].Draw();
-            }
+        for (let k in this._objs) {
+            this._objs[k].Draw();
         }
 
         this._ui.Draw();
@@ -418,6 +437,8 @@ class Draw_Wall {
 
         World.add(engine_local.world, [this._body]);
     }
+
+    ApplyTexture() {}
 
     Tick(dT) {}
 
@@ -454,6 +475,8 @@ class Draw_GroundElement {
         World.add(engine_local.world, [this._body]);
     }
 
+    ApplyTexture() {}
+
     Tick(dT) {}
 
     Destroy() {
@@ -484,26 +507,58 @@ class Draw_UserBall {
         this._body.restitution = 0.5;
         this._body.slop = 0.02;
         World.add(engine_local.world, [this._body]);
+
+        this._texture = null;
+        this._texture_num = Math.floor(Math.random() * 3);
+        this._tint = null;
+        this._sprite = null;
+    }
+    
+    ApplyTexture() {
+        this._texture = new PIXI.Texture(textures_cache.ball_sprites, 
+            new PIXI.Rectangle(128*this._texture_num, 0, 128, 128));
+        this._sprite = new PIXI.Sprite(this._texture);
+        this._sprite.width = this.radius*2;
+        this._sprite.height = this.radius*2;
+        this._sprite.position.set(this.x, this.y);
+        this._sprite.anchor.set(0.5);
+        this._sprite.tint = this.color;
+        stage.addChild(this._sprite);
     }
 
     Destroy() {
         World.remove(engine_local.world, [this._body]);
+
+        if (this._sprite !== null) {
+            stage.removeChild(this._sprite);
+        }
     }
 
-    Update(x, y, vx, vy, va) {
+    Update(x, y, vx, vy, va, a) {
         this.x = x;
         this.y = y;
         Body.setPosition(this._body, {x:x, y:y});
         Body.setVelocity(this._body, {x:vx, y:vy});
         Body.setAngularVelocity(this._body, va);
+        Body.setAngle(this._body, a);
+
+        if (this._sprite !== null) {
+            this._sprite.angle = a * RAD_TO_DEG;
+        }
     }
 
     Tick(dT) {
         this.x = this._body.position.x;
         this.y = this._body.position.y;
+
+        if (this._sprite !== null) {
+            this._sprite.position.set(this.x, this.y);
+            this._sprite.angle = this._body.angle * RAD_TO_DEG;
+        }
     }
 
     Draw() {
+        return;
         stage_graphics.lineStyle(1, 0xffff00, 1);
         stage_graphics.beginFill(this.color);
         stage_graphics.drawCircle(this.x, this.y, this.radius);
@@ -525,16 +580,19 @@ class Draw_Bomb {
         World.add(engine_local.world, [this._body]);
     }
 
+    ApplyTexture() {}
+
     Destroy() {
         World.remove(engine_local.world, [this._body]);
     }
     
-    Update(x, y, vx, vy, va) {
+    Update(x, y, vx, vy, va, a) {
         this.x = x;
         this.y = y;
         Body.setPosition(this._body, {x:x, y:y});
         Body.setVelocity(this._body, {x:vx, y:vy});
         Body.setAngularVelocity(this._body, va);
+        Body.setAngle(this._body, a);
     }
 
     Tick(dT) {
@@ -563,6 +621,8 @@ class Draw_BombExplosion {
 
         this._active = true;
     }
+    
+    ApplyTexture() {}
 
     Destroy() {}
 
@@ -594,6 +654,8 @@ class Draw_Magma {
         this.top = y - h/2;
         this.bottom = y + h/2;
     }
+    
+    ApplyTexture() {}
 
     Destroy() {}
 
@@ -615,6 +677,7 @@ class Draw_Magma {
 // DEBUG: placeholder class
 class Draw_BombSpawner {
     constructor() {}
+    ApplyTexture() {}
     Tick(dt) {}
     Destroy() {}
     Draw() {}

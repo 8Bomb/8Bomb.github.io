@@ -7,7 +7,7 @@
 // Disable right click menu. Avoid this line.
 // document.addEventListener("contextmenu", function (e) { e.preventDefault(); });
 
-const LOCAL = false;
+const LOCAL = true;
 
 const fmath = new FMath();
 
@@ -16,43 +16,43 @@ const HEIGHT = window.innerHeight;
 
 const COLORS = {
     GRAND_CANYON: {
-        "name": "Grand Canyon",
-        "bg": 0x3D232B,
-        "fill": 0x663E3B,
-        "title": 0xD28B3D,
-        "text": 0xDAC376,
-        "misc": 0xB1B637,
+        name: "Grand Canyon",
+        bg: 0x3D232B,
+        fill: 0x663E3B,
+        title: 0xD28B3D,
+        text: 0xDAC376,
+        misc: 0xB1B637,
     },
     KODIAK: {
-        "name": "Kodiak",
-        "bg": 0x59B8BF,
-        "fill": 0xE3E0E2,
-        "title": 0xF4E7DD,
-        "text": 0xF2B0A2,
-        "misc": 0xF6A889,
+        name: "Kodiak",
+        bg: 0x59B8BF,
+        fill: 0xE3E0E2,
+        title: 0xF4E7DD,
+        text: 0xF2B0A2,
+        misc: 0xF6A889,
     },
     PORTLAND: {
-        "name": "Portland",
-        "bg": 0x301D31,
-        "fill": 0xAC373E,
-        "title": 0xF37D61,
-        "text": 0xEE9651,
-        "misc": 0xA7C3B2,
+        name: "Portland",
+        bg: 0x301D31,
+        fill: 0xAC373E,
+        title: 0xF37D61,
+        text: 0xEE9651,
+        misc: 0xA7C3B2,
     },
 };
 const MAP_COLORS = {
     Kansas: {
-        "name": "Kansas",
-        "bg": 0x176B7D,
-        "wall": 0x389276,
-        "ground": 0x9D8E3A,
-        "bomb": 0xCE8F36,
-        "magma": 0xF05B52,
+        name: "Kansas",
+        bg: 0x176B7D,
+        wall: 0x389276,
+        ground: 0x9D8E3A,
+        bomb: 0xCE8F36,
+        magma: 0xF05B52,
     }
 }
 const BOMB_COLORS = {
     Dynamite: {
-        "main": 0xF05B52,
+        main: 0xF05B52,
     }
 }
 let color_scheme = COLORS.GRAND_CANYON;
@@ -71,9 +71,15 @@ let prev_tick = window.performance.now();
 let updates_num = 0;
 let updates_timer = 0;
 
+let textures_cache = {
+    ball_sprites: null,
+};
+
 const FPS_LOG_RATE = 10000; // ms
 const DATA_LOG_RATE = 10000; // ms
 const PING_RATE = 3000; // ms
+
+const RAD_TO_DEG = 57.296;
 
 function Tick() {
     let now = window.performance.now();
@@ -103,7 +109,8 @@ function Tick() {
     ui_menu.Tick(dT);
 
     // Drawing
-    ui_graphics.clear();
+    ui_graphics_1.clear();
+    ui_graphics_2.clear();
     stage_graphics.clear();
     fore_graphics.clear();
 
@@ -132,7 +139,7 @@ viewport
 
 viewport.moveCenter(0,0);
 
-// UI elements go in the UI - ui_graphics is a child.
+// UI elements go in the UI - ui_graphics_1 is a child.
 const ui = new PIXI.Container();
 app.stage.addChild(ui);
 
@@ -145,8 +152,10 @@ const stage_graphics = new PIXI.Graphics();
 stage.addChild(stage_graphics);
 const fore_graphics = new PIXI.Graphics();
 stage.addChild(fore_graphics);
-const ui_graphics = new PIXI.Graphics();
-ui.addChild(ui_graphics);
+const ui_graphics_1 = new PIXI.Graphics();
+ui.addChild(ui_graphics_1);
+const ui_graphics_2 = new PIXI.Graphics();
+ui.addChild(ui_graphics_2);
 
 let keys = {w:false,a:false,s:false,d:false};
 
@@ -169,7 +178,7 @@ let loading_stage = null;
 //let network = new LocalNetworkEmulator();
 let network_addr = "wss://skyhoffert-backend.com:5060";
 if (LOCAL) {
-    network_addr = "ws://localhost:5030";
+    network_addr = "ws://localhost:5060";
 }
 let network = null;
 let engine_network = new Engine_8Bomb();
@@ -199,7 +208,7 @@ function CommenceStageAction(a) {
                 ui_menu = new UI_About();
             } else if (tok[1] === "local-play") {
                 ui_menu = new UI_LocalPlay();
-                network = new Loca
+                // TODO: something about the network?
             } else if (tok[1] === "online-play") {
                 ui_menu = new UI_OnlinePlay();
                 network = new Network(network_addr);
@@ -277,6 +286,10 @@ function UpdateColorScheme(c) {
 
 function DarkenColor(c) {
     return (c & 0xfefefe) >> 1;
+}
+
+function RandomColor() {
+	return '#'+(Math.random() * 0xFFFFFF << 0).toString(16).padStart(6, '0');
 }
 
 function Sigs(n, dig=3) {
@@ -392,32 +405,41 @@ class UI_Button {
     Draw() {
         if (!this._active) { return; }
 
-        ui_graphics.lineStyle(0);
-        ui_graphics.beginFill(color_scheme.fill/2);
-        ui_graphics.drawRoundedRect(this._x - this._width/2 + 10, this._y - this._height/2 + 10,
+        ui_graphics_1.lineStyle(0);
+        ui_graphics_1.beginFill(color_scheme.fill/2);
+        ui_graphics_1.drawRoundedRect(this._x - this._width/2 + 10, this._y - this._height/2 + 10,
             this._width, this._height, this._corner_radius);
-        ui_graphics.endFill();
+        ui_graphics_1.endFill();
 
+        let has_outline = false;
         if (this._enabled) {
             if (this._selected) {
-                ui_graphics.lineStyle(6, color_scheme.title, this._select_alpha);
+                ui_graphics_2.lineStyle(6, color_scheme.title, this._select_alpha);
+                has_outline = true;
             } else {
-                ui_graphics.lineStyle(4, color_scheme.text, 1);
+                ui_graphics_2.lineStyle(4, color_scheme.text, 1);
+                has_outline = true;
             }
         } else {
-            ui_graphics.lineStyle(6, color_scheme.title, this._select_alpha);
+            ui_graphics_2.lineStyle(6, color_scheme.title, this._select_alpha);
+            has_outline = true;
         }
 
-        ui_graphics.beginFill(color_scheme.fill);
-        ui_graphics.drawRoundedRect(this._x - this._width/2, this._y - this._height/2, 
+        if (has_outline) {
+            ui_graphics_2.drawRoundedRect(this._x - this._width/2, this._y - this._height/2, 
+                this._width, this._height, this._corner_radius);
+        }
+
+        ui_graphics_1.beginFill(color_scheme.fill);
+        ui_graphics_1.drawRoundedRect(this._x - this._width/2, this._y - this._height/2, 
             this._width, this._height, this._corner_radius);
-        ui_graphics.endFill();
+        ui_graphics_1.endFill();
 
         if (this._has_dropdown) {
-            ui_graphics.lineStyle(0);
-            ui_graphics.beginFill(color_scheme.text);
-            ui_graphics.drawPolygon(this._dd_poly);
-            ui_graphics.endFill();
+            ui_graphics_1.lineStyle(0);
+            ui_graphics_1.beginFill(color_scheme.text);
+            ui_graphics_1.drawPolygon(this._dd_poly);
+            ui_graphics_1.endFill();
         }
     }
 }
@@ -581,10 +603,10 @@ class UI_Menu {
         }
 
         if (this._fading) {
-            ui_graphics.lineStyle(0);
-            ui_graphics.beginFill(0x000000, this._fade_pc);
-            ui_graphics.drawRect(0, 0, WIDTH, HEIGHT);
-            ui_graphics.endFill();
+            ui_graphics_1.lineStyle(0);
+            ui_graphics_1.beginFill(0x000000, this._fade_pc);
+            ui_graphics_1.drawRect(0, 0, WIDTH, HEIGHT);
+            ui_graphics_1.endFill();
         }
     }
 }
