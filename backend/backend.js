@@ -65,6 +65,8 @@ let prevTime = Date.now();
 let tick_timer = 0;
 let tick_frames = 0;
 function Tick() {
+    setTimeout(Tick, FPS);
+    
 	let now = Date.now();
 	let dT = now - prevTime;
 	prevTime = now;
@@ -80,8 +82,6 @@ function Tick() {
 	Engine.update(matter_engine, dT);
 
 	engine.Tick(dT);
-
-	setTimeout(Tick, FPS);
 }
 
 function Sigs(n, dig=3) {
@@ -96,6 +96,7 @@ const ENGINE_WIDTH = 1200;
 const ENGINE_HEIGHT = Math.round(ENGINE_WIDTH*9/16);
 
 const FPS = 1000/60;
+const FPS_LOG_RATE = 5000; // ms
 
 const play_opts = {
 	map: "Kansas",
@@ -112,7 +113,12 @@ class Network {
 		let self = this;
 		this._server.on("connection", function (evt) {
 			self.Connection(evt);
-		});
+        });
+        
+        this._measure_rx = 0;
+        this._measure_tx = 0;
+        this._measure_timer = Date.now();
+        this._measure_ticks = 0;
 	}
 
 	Connection(evt) {
@@ -146,19 +152,40 @@ class Network {
 	}
 
 	Message(evt) {
+        this._measure_rx += evt.length;
 		const msg = LZUTF8.decompress(evt, {inputEncoding:"Base64"});
-		this._rxQ.push({id:"", data:msg});
+        this._rxQ.push({id:"", data:msg});
 	}
 	
     ServerSend(msg, id="") {
-		const msgc = LZUTF8.compress(msg, {outputEncoding:"Base64"});
+        const msgc = LZUTF8.compress(msg, {outputEncoding:"Base64"});
+        const len = msgc.length;
 		if (id === "") {
 			for (let k in this._conns) {
-				this._conns[k].connection.send(msgc);
+                this._conns[k].connection.send(msgc);
+                this._measure_tx += len;
 			}
 		} else {
 			this._conns[id].connection.send(msgc);
-		}
+            this._measure_tx += len;
+        }
+
+        // Keep track of data rate every 100 send messages.
+        this._measure_ticks++;
+        if (this._measure_ticks > 100) {
+            const now = Date.now();
+            const elapsed = now - this._measure_timer;
+            this._measure_timer = now;
+
+            const rx_kbps = Sigs(this._measure_rx / elapsed * 8);
+            const tx_kbps = Sigs(this._measure_tx / elapsed * 8);
+
+            console.log("" + rx_kbps + " kbps down, " + tx_kbps + " kbps up");
+
+            this._measure_ticks = 0;
+            this._measure_rx = 0;
+            this._measure_tx = 0;
+        }
     }
 
     ServerRecv() {

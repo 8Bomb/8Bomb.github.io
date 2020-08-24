@@ -64,6 +64,56 @@ class Load_LocalPlay {
     }
 }
 
+class UI_Online {
+    constructor() {
+        this.paused = false;
+        this._fade = 0;
+        this._fade_alpha = 0.5;
+
+        this._ping_text = new PIXI.Text("- ms",
+            {fontFamily:"monospace", fontSize:14, fill:0xffffff, align:"right"});
+        this._ping_text.position.set(WIDTH - 10, 14);
+        this._ping_text.anchor.set(1, 0.5);
+        ui.addChild(this._ping_text);
+    }
+
+    Tick(dT) {
+        if (this.paused) {
+            if (this._fade < this._fade_alpha) {
+                this._fade += 0.05;
+                if (this._fade > this._fade_alpha) {
+                    this._fade = this._fade_alpha;
+                }
+            }
+        } else {
+            if (this._fade > 0) {
+                this._fade -= 0.05;
+                if (this._fade < 0) {
+                    this._fade = 0;
+                }
+            }
+        }
+    }
+
+    SetPing(v) {
+        this._ping_text.text = "" + v + " ms";
+        this._ping_text.updateText();
+    }
+
+    Toggle() {
+        this.paused = !this.paused;
+    }
+
+    Draw() {
+        if (this._fade <= 0) { return; }
+
+        ui_graphics.lineStyle(0);
+        ui_graphics.beginFill(0x000000, this._fade);
+        ui_graphics.drawRect(0, 0, WIDTH, HEIGHT);
+        ui_graphics.endFill();
+    }
+}
+
 class LocalPlay {
     constructor() {
         app.renderer.backgroundColor = MAP_COLORS[play_opts.map].bg;
@@ -75,10 +125,13 @@ class LocalPlay {
         this._rxStr = "";
 
         this._ping = -1;
+        this._ping_timer = 0;
         this._connected = false;
         this._checked = false;
 
         this._clientID = -1;
+
+        this._ui = new UI_Online();
     }
 
     _ClearWorld() {
@@ -91,134 +144,137 @@ class LocalPlay {
 
     _HandleNetwork() {
         // Handle network.
-        const rx = network.ClientRecv();
-        if (rx !== "") {
-            let rxp = {};
-            try {
-                rxp = JSON.parse(rx);
-            } catch {
-                console.log("ERR. Could not parse rx message in client.");
-            }
+        while (network.HasData()) {
+            const rx = network.ClientRecv();
+            if (rx !== "") {
+                let rxp = {};
+                try {
+                    rxp = JSON.parse(rx);
+                } catch {
+                    console.log("ERR. Could not parse rx message in client.");
+                }
 
-            if (rxp.type === "pong") {
-                const now = window.performance.now();
-                this._ping = now - parseFloat(rxp.spec.tsent);
-                console.log("ping: " + Sigs(this._ping) + " ms");
-            } else if (rxp.type === "open-response") {
-                this._clientID = rxp.spec.cID;
-                console.log("Given client ID " + this._clientID);
+                if (rxp.type === "pong") {
+                    const now = window.performance.now();
+                    this._ping = now - parseFloat(rxp.spec.tsent);
+                    //console.log("ping: " + Sigs(this._ping) + " ms");
+                    this._ui.SetPing(Sigs(this._ping, 0));
+                } else if (rxp.type === "open-response") {
+                    this._clientID = rxp.spec.cID;
+                    console.log("Given client ID " + this._clientID);
 
-                // Whie loading, make a ping request.
-                network.ClientSend(JSON.stringify({
-                    type: "ping",
-                    reqID: GenRequestID(6),
-                    spec: {
-                        tsent: Sigs(window.performance.now()),
-                        cID: this._clientID,
-                    },
-                }));
-        
-                // While loading, make a connection request.
-                network.ClientSend(JSON.stringify({
-                    type: "check",
-                    reqID: GenRequestID(6),
-                    spec: {
-                        game: "8Bomb",
-                        version: "0.1",
-                        cID: this._clientID,
-                    },
-                }));
-            } else if (rxp.type === "check-response") {
-                if (rxp.spec.good) {
-                    this._checked = true;
-
+                    // Whie loading, make a ping request.
                     network.ClientSend(JSON.stringify({
-                        type: "connect",
+                        type: "ping",
                         reqID: GenRequestID(6),
                         spec: {
+                            tsent: Sigs(window.performance.now()),
                             cID: this._clientID,
                         },
                     }));
-                } else {
-                    console.log("FAILED. Check got good=false.");
-                    this._failed = true;
-                    stage_actions.push("check failed");
-                }
-            } else if (rxp.type === "connect-response") {
-                if (rxp.spec.good) {
-                    console.log("Got good connection to server");
-                    console.log("color: " + rxp.spec.color);
+            
+                    // While loading, make a connection request.
+                    network.ClientSend(JSON.stringify({
+                        type: "check",
+                        reqID: GenRequestID(6),
+                        spec: {
+                            game: "8Bomb",
+                            version: "0.1",
+                            cID: this._clientID,
+                        },
+                    }));
+                } else if (rxp.type === "check-response") {
+                    if (rxp.spec.good) {
+                        this._checked = true;
 
-                    this._debug_text = new PIXI.Text("your color",
-                        {fontFamily:"monospace", fontSize:50, fill:rxp.spec.color, align:"left", fontWeight:"bold"});
-                    this._debug_text.position.set(20, 30);
-                    this._debug_text.anchor.set(0, 0.5);
-                    ui.addChild(this._debug_text);
-                } else {
-                    console.log("FAILED. Connect got good=false.");
-                    this._failed = true;
-                    stage_actions.push("connect failed");
-                }
-            } else if (rxp.type === "8B") {
-                if (rxp.spec.a === "aur") {
-                    let lost = "LOST ";
-                    for (let i = 0; i < rxp.spec.s.length; i++) {
-                        const o = rxp.spec.s[i];
-                        //console.log("" + i);
-                        //console.log(rxp.spec);
-                        if (o.a === "u") {
-                            if (!(o.i in this._objs)) {
-                                this._ids.push(o.i);
-                                if (o.t === "w") {
-                                    this._objs[o.i] = new Draw_Wall(o.s.x, o.s.y, o.s.w, o.s.h);
-                                } else if (o.t === "g") {
-                                    this._objs[o.i] = new Draw_GroundElement(o.s.x, o.s.y, o.s.w, o.s.h);
-                                } else if (o.t === "b") {
-                                    this._objs[o.i] = new Draw_Bomb(o.s.x, o.s.y, o.s.r, o.s.c);
-                                } else if (o.t === "u") {
-                                    this._objs[o.i] = new Draw_UserBall(o.s.x, o.s.y, o.s.r, o.s.c);
-                                } else if (o.t === "bs") {
-                                    this._objs[o.i] = new Draw_BombSpawner();
-                                } else if (o.t === "m") {
-                                    this._objs[o.i] = new Draw_Magma(o.s.x, o.s.y, o.s.w, o.s.h);
+                        network.ClientSend(JSON.stringify({
+                            type: "connect",
+                            reqID: GenRequestID(6),
+                            spec: {
+                                cID: this._clientID,
+                            },
+                        }));
+                    } else {
+                        console.log("FAILED. Check got good=false.");
+                        this._failed = true;
+                        stage_actions.push("check failed");
+                    }
+                } else if (rxp.type === "connect-response") {
+                    if (rxp.spec.good) {
+                        console.log("Got good connection to server");
+                        //console.log("color: " + rxp.spec.color);
+
+                        this._debug_text = new PIXI.Text("your color",
+                            {fontFamily:"monospace", fontSize:50, fill:rxp.spec.color, align:"left", fontWeight:"bold"});
+                        this._debug_text.position.set(20, 30);
+                        this._debug_text.anchor.set(0, 0.5);
+                        ui.addChild(this._debug_text);
+                    } else {
+                        console.log("FAILED. Connect got good=false.");
+                        this._failed = true;
+                        stage_actions.push("connect failed");
+                    }
+                } else if (rxp.type === "8B") {
+                    if (rxp.spec.a === "aur") {
+                        let lost = "LOST ";
+                        for (let i = 0; i < rxp.spec.s.length; i++) {
+                            const o = rxp.spec.s[i];
+                            //console.log("" + i);
+                            //console.log(rxp.spec);
+                            if (o.a === "u") {
+                                if (!(o.i in this._objs)) {
+                                    this._ids.push(o.i);
+                                    if (o.t === "w") {
+                                        this._objs[o.i] = new Draw_Wall(o.s.x, o.s.y, o.s.w, o.s.h);
+                                    } else if (o.t === "g") {
+                                        this._objs[o.i] = new Draw_GroundElement(o.s.x, o.s.y, o.s.w, o.s.h);
+                                    } else if (o.t === "b") {
+                                        this._objs[o.i] = new Draw_Bomb(o.s.x, o.s.y, o.s.r, o.s.c);
+                                    } else if (o.t === "u") {
+                                        this._objs[o.i] = new Draw_UserBall(o.s.x, o.s.y, o.s.r, o.s.c);
+                                    } else if (o.t === "bs") {
+                                        this._objs[o.i] = new Draw_BombSpawner();
+                                    } else if (o.t === "m") {
+                                        this._objs[o.i] = new Draw_Magma(o.s.x, o.s.y, o.s.w, o.s.h);
+                                    }
+                                }
+                                
+                                // Update all objects.
+                                if (o.t === "w" || o.t === "g" || o.t === "m") {
+                                    this._objs[o.i].Update(o.s.x, o.s.y);
+                                } else if (o.t === "b" || o.t === "u") {
+                                    this._objs[o.i].Update(o.s.x, o.s.y, o.s.vx, o.s.vy, o.s.va);
+                                }
+                            } else if (o.a === "r") {
+                                if (o.i in this._objs) {
+                                    this._objs[o.i].Destroy();
+                                    this._ids.splice(this._ids.indexOf(o.i), 1);
+                                    delete this._objs[o.i];
+                                } else {
+                                    //console.log("TODO: this should never appear???");
+                                    //console.log("idx: " + this._ids.indexOf(o.i));
+                                    lost += "" + o.i + ",";
                                 }
                             }
-                            
-                            // Update all objects.
-                            if (o.t === "w" || o.t === "g" || o.t === "m") {
-                                this._objs[o.i].Update(o.s.x, o.s.y);
-                            } else if (o.t === "b" || o.t === "u") {
-                                this._objs[o.i].Update(o.s.x, o.s.y, o.s.vx, o.s.vy, o.s.va);
-                            }
-                        } else if (o.a === "r") {
-                            if (o.i in this._objs) {
-                                this._objs[o.i].Destroy();
-                                this._ids.splice(this._ids.indexOf(o.i), 1);
-                                delete this._objs[o.i];
-                            } else {
-                                //console.log("TODO: this should never appear???");
-                                //console.log("idx: " + this._ids.indexOf(o.i));
-                                lost += "" + o.i + ",";
-                            }
                         }
-                    }
-                } else if (rxp.spec.a === "cw") {
-                    this._ClearWorld();
-                } else if (rxp.spec.a === "str") {
-                    // engine_local.timing.timeScale = 1;
-                } else if (rxp.spec.a === "yd") {
-                    console.log("DIED");
-                    this._died_text = new PIXI.Text("WASTED",
-                        {fontFamily:"monospace", fontSize:80, fill:0xff3333, align:"center", fontWeight:"bold"});
-                    this._died_text.position.set(WIDTH/2, HEIGHT/2);
-                    this._died_text.anchor.set(0.5);
-                    ui.addChild(this._died_text);
+                    } else if (rxp.spec.a === "cw") {
+                        this._ClearWorld();
+                    } else if (rxp.spec.a === "str") {
+                        // engine_local.timing.timeScale = 1;
+                    } else if (rxp.spec.a === "yd") {
+                        console.log("DIED");
+                        this._died_text = new PIXI.Text("WASTED",
+                            {fontFamily:"monospace", fontSize:80, fill:0xff3333, align:"center", fontWeight:"bold"});
+                        this._died_text.position.set(WIDTH/2, HEIGHT/2);
+                        this._died_text.anchor.set(0.5);
+                        ui.addChild(this._died_text);
 
-                    // TODO: probably not the best way to remove.
-                    this._objs[rxp.spec.i].Destroy();
+                        // TODO: probably not the best way to remove.
+                        this._objs[rxp.spec.i].Destroy();
+                    }
+                } else {
+                    console.log("Client couldn't handle " + rxp.type);
                 }
-            } else {
-                console.log("Client couldn't handle " + rxp.type);
             }
         }
     }
@@ -256,7 +312,7 @@ class LocalPlay {
     }
 
     Stop() {
-        return;
+        /*
         network.ClientSend(JSON.stringify({
             type: "admin",
             reqID: GenRequestID(6),
@@ -271,6 +327,7 @@ class LocalPlay {
                 action: "destroy",
             },
         }));
+        */
     }
 
     Destroy() {
@@ -282,6 +339,22 @@ class LocalPlay {
 
         for (let k in this._objs) {
             this._objs[k].Tick(dT);
+        }
+
+        this._ui.Tick(dT);
+
+        this._ping_timer += dT;
+        if (this._ping_timer >= PING_RATE) {
+            this._ping_timer = 0;
+            // Whie loading, make a ping request.
+            network.ClientSend(JSON.stringify({
+                type: "ping",
+                reqID: GenRequestID(6),
+                spec: {
+                    tsent: Sigs(window.performance.now()),
+                    cID: this._clientID,
+                },
+            }));
         }
     }
 
@@ -296,13 +369,16 @@ class LocalPlay {
         //this.Bomb(pt.x, pt.y);
     }
     Key(k, d) {
-        // DEBUG
-        if (k === "Escape") {
-            stage_actions.push("connect failed");
+        if (!this._connected) { return; }
+
+        if (k === "Escape" && d) {
+            this._ui.Toggle();
             return;
         }
 
-        if (!this._connected) { return; }
+        if (this._ui.paused) {
+            return;
+        }
 
         network.ClientSend(JSON.stringify({
             type: "input",
@@ -322,6 +398,8 @@ class LocalPlay {
                 this._objs[this._ids[i]].Draw();
             }
         }
+
+        this._ui.Draw();
     }
 }
 
@@ -558,6 +636,11 @@ class Network {
         this._ws.onmessage = function (evt) {
             self._WSRecv(evt);
         }
+
+        this._measure_rx = 0;
+        this._measure_tx = 0;
+        this._measure_timer = window.performance.now();
+        this._measure_ticks = 0;
     }
 
     Destroy() {
@@ -571,6 +654,28 @@ class Network {
 
     _WSRecv(evt) {
         this._rxQ.push(evt.data);
+
+        this._measure_rx += evt.data.length;
+        this._measure_ticks++;
+        
+        if (this._measure_ticks > 100) {
+            const now = window.performance.now();
+            const elapsed = now - this._measure_timer;
+            this._measure_timer = now;
+
+            const rx_kbps = Sigs(this._measure_rx / elapsed * 8);
+            const tx_kbps = Sigs(this._measure_tx / elapsed * 8);
+
+            console.log("" + rx_kbps + " kbps down, " + tx_kbps + " kbps up");
+
+            this._measure_ticks = 0;
+            this._measure_rx = 0;
+            this._measure_tx = 0;
+        }
+    }
+
+    HasData() {
+        return this._rxQ.length > 0;
     }
 
     ClientRecv() {
@@ -587,5 +692,6 @@ class Network {
 
         const msgc = LZUTF8.compress(msg, {outputEncoding:"Base64"});
         this._ws.send(msgc);
+        this._measure_tx += msgc.length;
     }
 }

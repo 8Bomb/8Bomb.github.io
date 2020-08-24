@@ -71,6 +71,10 @@ let prev_tick = window.performance.now();
 let updates_num = 0;
 let updates_timer = 0;
 
+const FPS_LOG_RATE = 10000; // ms
+const DATA_LOG_RATE = 10000; // ms
+const PING_RATE = 3000; // ms
+
 function Tick() {
     let now = window.performance.now();
     let dT = Sigs(now - prev_tick);
@@ -80,7 +84,7 @@ function Tick() {
 
     updates_num++;
     updates_timer += dT;
-    if (updates_timer > 3000) {
+    if (updates_timer > FPS_LOG_RATE) {
         const fps = Sigs(updates_num / updates_timer) * 1000;
         console.log("fps: " + fps);
         updates_num = 0;
@@ -276,7 +280,7 @@ function DarkenColor(c) {
 }
 
 function Sigs(n, dig=3) {
-    return Math.round(n * Math.pow(10, dig)) / 1000;
+    return Math.round(n * Math.pow(10, dig)) / Math.pow(10, dig);
 }
 
 // Functions //////////////////////////////////////////////////////////////////////////////////////
@@ -577,6 +581,7 @@ class UI_Menu {
         }
 
         if (this._fading) {
+            ui_graphics.lineStyle(0);
             ui_graphics.beginFill(0x000000, this._fade_pc);
             ui_graphics.drawRect(0, 0, WIDTH, HEIGHT);
             ui_graphics.endFill();
