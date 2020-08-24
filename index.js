@@ -7,7 +7,7 @@
 // Disable right click menu. Avoid this line.
 // document.addEventListener("contextmenu", function (e) { e.preventDefault(); });
 
-const LOCAL = true;
+const LOCAL = false;
 
 const fmath = new FMath();
 
