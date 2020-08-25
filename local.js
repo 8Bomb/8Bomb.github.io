@@ -12,7 +12,7 @@ class Load_LocalPlay {
 
         this._fading = false;
         this._fade_pc = 1;
-        this._active = true;
+        this.active = true;
     }
 
     Destroy() {}
@@ -22,7 +22,7 @@ class Load_LocalPlay {
     Key(k, d) {}
 
     Tick(dT) {
-        if (!this._active) { return; }
+        if (!this.active) { return; }
 
         this._elapsed += dT;
         this._arcval = Math.cos(this._elapsed / 600) * Math.PI*2;
@@ -36,7 +36,7 @@ class Load_LocalPlay {
             this._fade_pc -= 0.01;
             if (this._fade_pc <= 0) {
                 stage_actions.push("play start");
-                this._active = false;
+                this.active = false;
             }
         }
 
@@ -46,7 +46,7 @@ class Load_LocalPlay {
     }
 
     Draw() {
-        if (!this._active) { return; }
+        if (!this.active) { return; }
 
         ui_graphics_1.lineStyle(0);
         ui_graphics_1.beginFill(0x000000, this._fade_pc);
@@ -120,6 +120,8 @@ class LocalPlay {
         this._loading = true;
 
         this._objs = {};
+
+        this._gfx = [];
 
         this._rxStr = "";
 
@@ -207,6 +209,8 @@ class LocalPlay {
                             reqID: GenRequestID(6),
                             spec: {
                                 cID: this._clientID,
+                                color: RandomColor(),
+                                texture_num: Math.floor(Math.random() * 3),
                             },
                         }));
                     } else {
@@ -246,7 +250,8 @@ class LocalPlay {
                                     } else if (o.t === "b") {
                                         this._objs[o.i] = new Draw_Bomb(o.s.x, o.s.y, o.s.r, o.s.c);
                                     } else if (o.t === "u") {
-                                        this._objs[o.i] = new Draw_UserBall(o.s.x, o.s.y, o.s.r, o.s.c);
+                                        console.log("DEBUG: tn " + o.s.tn);
+                                        this._objs[o.i] = new Draw_UserBall(o.s.x, o.s.y, o.s.r, o.s.c, o.s.tn);
                                     } else if (o.t === "bs") {
                                         this._objs[o.i] = new Draw_BombSpawner();
                                     } else if (o.t === "m") {
@@ -264,6 +269,10 @@ class LocalPlay {
                                 }
                             } else if (o.a === "r") {
                                 if (o.i in this._objs) {
+                                    const obj = this._objs[o.i];
+                                    if (obj.type === "b") {
+                                        this.AddExplosion(obj.x, obj.y, obj.radius);
+                                    }
                                     this._objs[o.i].Destroy();
                                     delete this._objs[o.i];
                                 } else {
@@ -344,6 +353,10 @@ class LocalPlay {
         */
     }
 
+    AddExplosion(x, y, r) {
+        this._gfx.push(new Draw_BombExplosion(x, y, r));
+    }
+
     Destroy() {
         this.Stop();
     }
@@ -351,9 +364,15 @@ class LocalPlay {
     Tick(dT) {
         this._HandleNetwork();
 
+        if (!this._connected) { return; }
+
         if (this._loaded) {
             while (this._ids_to_apply_tex.length > 0) {
-                this._objs[this._ids_to_apply_tex[0]].ApplyTexture();
+                if (this._objs[this._ids_to_apply_tex[0]]) {
+                    this._objs[this._ids_to_apply_tex[0]].ApplyTexture();
+                } else {
+                    console.log("TODO: why here?");
+                }
                 this._ids_to_apply_tex.splice(0, 1);
             }
         }
@@ -376,6 +395,14 @@ class LocalPlay {
                     cID: this._clientID,
                 },
             }));
+        }
+
+        for (let i = 0; i < this._gfx.length; i++) {
+            this._gfx[i].Tick(dT);
+            if (this._gfx[i].active === false) {
+                this._gfx.splice(i, 1);
+                i--;
+            }
         }
     }
 
@@ -419,6 +446,10 @@ class LocalPlay {
         }
 
         this._ui.Draw();
+
+        for (let i = 0; i < this._gfx.length; i++) {
+            this._gfx[i].Draw();
+        }
     }
 }
 
@@ -432,6 +463,7 @@ class Draw_Wall {
         this.height = h;
         this.bottom = y + h/2;
         this.right = x + w/2;
+        this.type = "w";
 
         this._body = Bodies.rectangle(this.x, this.y, this.width, this.height, {isStatic:true})
 
@@ -469,6 +501,7 @@ class Draw_GroundElement {
         this.right = x + w/2;
         this.top = y - h/2;
         this.bottom = y + h/2;
+        this.type = "g";
         
         this._body = Bodies.rectangle(this.x, this.y, this.width, this.height, {isStatic:true});
 
@@ -497,11 +530,12 @@ class Draw_GroundElement {
 }
 
 class Draw_UserBall {
-    constructor(x, y, r, c) {
+    constructor(x, y, r, c, tn) {
         this.x = x;
         this.y = y;
         this.radius = r;
         this.color = PIXI.utils.string2hex(c);
+        this.type = "u";
         
         this._body = Bodies.circle(this.x, this.y, this.radius, 12);
         this._body.restitution = 0.5;
@@ -509,7 +543,7 @@ class Draw_UserBall {
         World.add(engine_local.world, [this._body]);
 
         this._texture = null;
-        this._texture_num = Math.floor(Math.random() * 3);
+        this._texture_num = tn;
         this._tint = null;
         this._sprite = null;
     }
@@ -557,13 +591,7 @@ class Draw_UserBall {
         }
     }
 
-    Draw() {
-        return;
-        stage_graphics.lineStyle(1, 0xffff00, 1);
-        stage_graphics.beginFill(this.color);
-        stage_graphics.drawCircle(this.x, this.y, this.radius);
-        stage_graphics.endFill();
-    }
+    Draw() {}
 }
 
 class Draw_Bomb {
@@ -572,6 +600,7 @@ class Draw_Bomb {
         this.y = y;
         this.radius = r;
         this.color = c;
+        this.type = "b";
 
         this.active = true;
 
@@ -610,16 +639,16 @@ class Draw_Bomb {
     }
 }
 
-// TODO: what to do here?
 class Draw_BombExplosion {
-    constructor(x, y, r, c) {
+    constructor(x, y, r, c=MAP_COLORS[play_opts.map].magma) {
         this.x = x;
         this.y = y;
-        this.radius = r;
+        this.radius = r*4;
         this._alpha = 1;
         this._color = c;
+        this.type = "e";
 
-        this._active = true;
+        this.active = true;
     }
     
     ApplyTexture() {}
@@ -653,6 +682,7 @@ class Draw_Magma {
         this.right = x + w/2;
         this.top = y - h/2;
         this.bottom = y + h/2;
+        this.type = "m";
     }
     
     ApplyTexture() {}
@@ -676,7 +706,13 @@ class Draw_Magma {
 
 // DEBUG: placeholder class
 class Draw_BombSpawner {
-    constructor() {}
+    constructor() {
+        this.x = 0;
+        this.y = 0;
+        this.width = 0;
+        this.height = 0;
+        this.type = "bs";
+    }
     ApplyTexture() {}
     Tick(dt) {}
     Destroy() {}

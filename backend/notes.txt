@@ -48,6 +48,7 @@ s: specs (array)
         u: user
         bs: bomb spawner
         m: magma
+        e: explosion
     s: specifications, dependent on type
         x: x (always center of obj)
         y: y (always center of obj)

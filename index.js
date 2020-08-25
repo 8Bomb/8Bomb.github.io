@@ -7,8 +7,6 @@
 // Disable right click menu. Avoid this line.
 // document.addEventListener("contextmenu", function (e) { e.preventDefault(); });
 
-const LOCAL = false;
-
 const fmath = new FMath();
 
 const WIDTH = window.innerWidth;
@@ -176,10 +174,19 @@ let loading_stage = null;
 
 // TODO: add for local play
 //let network = new LocalNetworkEmulator();
-let network_addr = "wss://skyhoffert-backend.com:5060";
-if (LOCAL) {
-    network_addr = "ws://localhost:5060";
+let network_addr = "wss://skyhoffert-backend.com:5060"
+
+// If there is a file in the backend folder named LOCAL - use a local server.
+// For development purposes.
+var xhr = new XMLHttpRequest();
+xhr.open("HEAD", "backend/LOCAL");
+xhr.send();
+xhr.onreadystatechange = function() {
+    if (this.status === 200) {
+        network_addr = "ws://localhost:5060";
+    }
 }
+
 let network = null;
 let engine_network = new Engine_8Bomb();
 
@@ -211,7 +218,6 @@ function CommenceStageAction(a) {
                 // TODO: something about the network?
             } else if (tok[1] === "online-play") {
                 ui_menu = new UI_OnlinePlay();
-                network = new Network(network_addr);
             }
         } else if (tok[0] === "soundfx") {
             console.log("TODO: turn sfx " + tok[1]);
@@ -237,6 +243,7 @@ function CommenceStageAction(a) {
             if (tok[1] === "fade") {
                 ui_menu.FadeOut("play load");
             } else if (tok[1] === "load") {
+                network = new Network(network_addr);
                 ui_menu.Destroy();
                 ui_menu = new Load_LocalPlay();
                 loading_stage = new LocalPlay();
@@ -301,7 +308,7 @@ function Sigs(n, dig=3) {
 // Classes ////////////////////////////////////////////////////////////////////////////////////////
 
 class UI_Button {
-    constructor(x, y, w, h, r, t, fs, a, act=true, dd=false) {
+    constructor(x, y, w, h, r, t, fs, a, act=true, dd=false, ss=false) {
         this._x = x;
         this._y = y;
         this._width = w;
@@ -332,6 +339,8 @@ class UI_Button {
         }
 
         this._has_dropdown = dd;
+
+        this._small_selection = ss;
 
         if (this._has_dropdown) {
             this._dd_pts = [
@@ -426,8 +435,14 @@ class UI_Button {
         }
 
         if (has_outline) {
-            ui_graphics_2.drawRoundedRect(this._x - this._width/2, this._y - this._height/2, 
-                this._width, this._height, this._corner_radius);
+            if (this._small_selection) {
+                const sel_ht = this._font_size + 8;
+                ui_graphics_2.drawRoundedRect(this._x - this._width/2, this._y - sel_ht/2, 
+                    this._width, sel_ht, this._corner_radius);
+            } else {
+                ui_graphics_2.drawRoundedRect(this._x - this._width/2, this._y - this._height/2, 
+                    this._width, this._height, this._corner_radius);
+            }
         }
 
         ui_graphics_1.beginFill(color_scheme.fill);
@@ -603,10 +618,10 @@ class UI_Menu {
         }
 
         if (this._fading) {
-            ui_graphics_1.lineStyle(0);
-            ui_graphics_1.beginFill(0x000000, this._fade_pc);
-            ui_graphics_1.drawRect(0, 0, WIDTH, HEIGHT);
-            ui_graphics_1.endFill();
+            ui_graphics_2.lineStyle(0);
+            ui_graphics_2.beginFill(0x000000, this._fade_pc);
+            ui_graphics_2.drawRect(0, 0, WIDTH, HEIGHT);
+            ui_graphics_2.endFill();
         }
     }
 }
@@ -724,13 +739,13 @@ class UI_Settings extends UI_Menu {
         // button 6, 7, and 8 (dropdown 0).
         this._buttons.push(new UI_Button(
             550, 540, 350, 70, this._btn_rad, "Grand Canyon", this._btn_fs, 
-            "color-scheme GRAND_CANYON; submenu close 0", false));
+            "color-scheme GRAND_CANYON; submenu close 0", false, false, true));
         this._buttons.push(new UI_Button(
             550, 580, 350, 70, this._btn_rad, "Kodiak", this._btn_fs,
-            "color-scheme KODIAK; submenu close 0", false));
+            "color-scheme KODIAK; submenu close 0", false, false, true));
         this._buttons.push(new UI_Button(
             550, 620, 350, 60, this._btn_rad, "Portland", this._btn_fs,
-            "color-scheme PORTLAND; submenu close 0", false));
+            "color-scheme PORTLAND; submenu close 0", false, false, false));
 
         this._selected_button = 0;
         this._buttons[this._selected_button].Select();

@@ -127,10 +127,10 @@ class Network {
 		this._conns[cid] = {connection: evt, id: cid};
 		let self = this;
 		evt.on("close", function (evt) {
-			self.Close(evt);
+			self.Close(evt, cid);
 		});
 		evt.on("message", function (evt) {
-			self.Message(evt);
+			self.Message(evt, cid);
 		});
 
 		evt.send(LZUTF8.compress(JSON.stringify({
@@ -142,13 +142,10 @@ class Network {
 		}), {outputEncoding:"Base64"}));
 	}
 
-	Close(evt) {
-		for (let k in this._conns) {
-			if (evt === this._conns[k].connection) {
-				delete this._conns[k];
-			}
-		}
-		console.log("connection closed");
+	Close(evt, cid) {
+        engine.RemoveClient(cid);
+        delete this._conns[cid];
+        console.log("connection to client " + cid + " closed.");
 	}
 
 	Message(evt) {
@@ -294,6 +291,9 @@ class Engine_8Bomb {
                 vx: o.vx, vy: o.vy, va: o.va,
                 a: o.angle, c: o.color,
             }
+            if (type === "u") {
+                specs.s.tn = o.texture_num;
+            }
         }
         return specs;
     }
@@ -390,7 +390,13 @@ class Engine_8Bomb {
         console.log("ADMIN: stopping engine.");
         // matter_engine.timing.timeScale = 0;
 		this.bomb_spawning = true;
-	}
+    }
+    
+    RemoveClient(cid) {
+        this._rmQ.push(this._clients[cid].id);
+        delete this._clients[cid];
+        console.log("Removing client " + cid + " from world.");
+    }
 	
 	NetSet() {
 		this._net_set = true;
@@ -467,16 +473,20 @@ class Engine_8Bomb {
 				} else if (rxp.type === "connect") {
 					console.log("DEBUG: got connect message");
 					// TODO: this probably needs some auth, eh?
-					const cid = rxp.spec.cID;
+                    const cid = rxp.spec.cID;
+                    const cc = rxp.spec.color;
+                    const ctn = rxp.spec.texture_num;
+
+                    console.log("DEBUG: cc: " + cc + ", tn: " + ctn);
 					
 					// generate a user ball upon connect.
 					if (cid in this._clients) {
 						console.log("TODO: got a duplicated connect?");
 					}
 					let id = this._NewID(this._keylen);
-					this._objs[id] = new UserBall(0, -ENGINE_HEIGHT/2);
+					this._objs[id] = new UserBall(0, -ENGINE_HEIGHT/2, cc, ctn);
 					this._clients[cid] = {
-						id: id,
+                        id: id,
 					};
 
 					network.ServerSend(JSON.stringify({
@@ -485,7 +495,8 @@ class Engine_8Bomb {
 						spec: {
 							reqID: rxp.reqID,
 							good: true,
-							color: this._objs[id].color,
+                            color: cc,
+                            texture_num: ctn,
 						}
 					}), cid);
 
@@ -709,7 +720,7 @@ class GroundElement {
 }
 
 class UserBall {
-    constructor(x, y) {
+    constructor(x, y, c, tn) {
         this.x = x;
         this.y = y;
         this.radius = 8;
@@ -719,7 +730,8 @@ class UserBall {
         this.angle = 0;
 		
 		// TODO: better colors.
-		this.color = RandomColor();
+        this.color = c;
+        this.texture_num = tn;
 
         this._falling = true;
         
