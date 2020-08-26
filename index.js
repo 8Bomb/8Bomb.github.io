@@ -227,7 +227,7 @@ function CommenceStageAction(a) {
             console.log("TODO: turn music " + tok[1]);
             playing_music = tok[1] === "on";
         } else if (tok[0] === "donate") {
-            console.log("TODO: open donate page.");
+            window.location = "https://paypal.me/skyhoffert";
         } else if (tok[0] === "submenu") {
             if (tok[1] === "open") {
                 console.log("opening submenu " + tok[2]);
