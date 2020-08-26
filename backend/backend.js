@@ -1,3 +1,6 @@
+// Sky Hoffert
+// Back end for 8Bomb.io.
+
 console.log("starting.");
 
 const fs = require("fs");
@@ -73,7 +76,7 @@ function Tick() {
 
     tick_timer += dT;
     tick_frames++;
-    if (tick_timer > 3000) {
+    if (tick_timer > FPS_LOG_RATE) {
         console.log("fps: " + Sigs(tick_frames / tick_timer * 1000));
         tick_timer = 0;
         tick_frames = 0;
@@ -97,6 +100,8 @@ const ENGINE_HEIGHT = Math.round(ENGINE_WIDTH*9/16);
 
 const FPS = 1000/60;
 const FPS_LOG_RATE = 5000; // ms
+
+const GROUND_COLLISION_RATE = 1000; // ms
 
 const play_opts = {
 	map: "Kansas",
@@ -196,7 +201,14 @@ class Network {
 	
 	HasData() {
 		return this._rxQ.length !== 0;
-	}
+    }
+    
+    Destroy() {
+        while (this._conns.length > 0) {
+            this._conns[0].connection.close();
+            this._conns.splice(0, 1);
+        }
+    }
 }
 
 let network = new Network(wss);
@@ -250,14 +262,14 @@ class Engine_8Bomb {
         this._objs[this._bomb_spawner] = new BombSpawner(0, -ENGINE_HEIGHT/2 - 20, ENGINE_WIDTH - 40);
         
         // Magma.
-        this._magma = this._NewID(this._keylen);
-        this._objs[this._magma] = new Magma(0, ENGINE_HEIGHT/2 - 40, ENGINE_WIDTH, 80);
+        //this._magma = this._NewID(this._keylen);
+        //this._objs[this._magma] = new Magma(0, ENGINE_HEIGHT/2 - 40, ENGINE_WIDTH, 80);
         
         // Left wall.
-        this._objs[this._NewID(this._keylen)] = new Wall(-ENGINE_WIDTH/2 - 20, -ENGINE_HEIGHT/2, 40, ENGINE_HEIGHT);
+        //this._objs[this._NewID(this._keylen)] = new Wall(-ENGINE_WIDTH/2 - 20, -ENGINE_HEIGHT/2, 40, ENGINE_HEIGHT);
 
         // Right wall.
-        this._objs[this._NewID(this._keylen)] = new Wall(ENGINE_WIDTH/2 - 20, -ENGINE_HEIGHT/2, 40, ENGINE_HEIGHT);
+        //this._objs[this._NewID(this._keylen)] = new Wall(ENGINE_WIDTH/2 - 20, -ENGINE_HEIGHT/2, 40, ENGINE_HEIGHT);
     }
 
     _NewID(n) {
@@ -520,9 +532,9 @@ class Engine_8Bomb {
 				} else if (rxp.type === "input") {
 					if (rxp.spec.key === "F2" && rxp.spec.down === true) {
 						console.log("DEBUG: got f2 special code");
-						// TODO: reset the lobby, basically
+						console.log("TODO: reset the lobby");
 					} else if (rxp.spec.key === "/" && rxp.spec.down === true) {
-						console.log("DEBUG: got / special code");
+						console.log("DEBUG: got '/' special code");
 						this.Start();
 					}
 					this._objs[this._clients[rxp.spec.cID].id].Key(rxp.spec.key, rxp.spec.down);
@@ -581,6 +593,20 @@ class Engine_8Bomb {
                 if (Matter.SAT.collides(b, o._body).collided) { return true; }
             }
         }
+        return false;
+    }
+
+    PointInsideGround(x, y) {
+        for (let k in this._objs) {
+            const o = this._objs[k];
+            if (o.type !== "g") { continue; }
+
+            const res = Matter.Query.point([o._body], {x:x, y:y});
+            if (res.length !== 0) {
+                return true;
+            }
+        }
+
         return false;
     }
     
@@ -750,6 +776,10 @@ class UserBall {
         this.type = "u";
 
         this._keys = {w:false, a:false, s:false, d:false};
+        
+        this._inside_ground_rate = GROUND_COLLISION_RATE; // ms
+        this._inside_ground_timer = this._inside_ground_rate;
+        this._inside_ground = false;
     }
 
     Key(k, d) {
@@ -807,8 +837,28 @@ class UserBall {
             this._jumpframes--;
         }
 
+        // Don't rotate too fast.
         if (Math.abs(this._body.angularVelocity) > 1) {
             Body.setAngularVelocity(this._body, Math.sign(this._body.angularVelocity));
+        }
+
+        // If we found that this was stuck in the ground previously.
+        if (this._inside_ground) {
+            // Check again until out.
+            this._inside_ground = engine.PointInsideGround(this.x + Math.random(), this.y + this.radius*0.8);
+
+            // If stuck in the ground, move upwards.
+            // TODO: not an ideal solution, but it works for now.
+            if (this._inside_ground) {
+                Body.setPosition(this._body, {x:this.x - 0.01, y:this.y - 2});
+            }
+        } else {
+            // Every so often (this._inside_ground_rate ms) check if inside ground.
+            this._inside_ground_timer -= dT;
+            if (this._inside_ground_timer < 0) {
+                this._inside_ground_timer = this._inside_ground_rate;
+                this._inside_ground = engine.PointInsideGround(this.x + Math.random(), this.y + this.radius*0.8);
+            }
         }
 
         this.x = Sigs(this._body.position.x);
@@ -818,10 +868,12 @@ class UserBall {
         this.va = Sigs(this._body.angularVelocity);
         this.angle = Sigs(this._body.angle);
 
+        // Conditions for killing a player.
 		if (this.y > ENGINE_HEIGHT) {
 			this.active = false;
-		}
-		if (engine.Magma().Contains(this.x, this.y)) {
+        }
+        const magma = engine.Magma();
+		if (magma !== null && magma.Contains(this.x, this.y)) {
 			this.active = false;
 		}
     }
@@ -858,6 +910,10 @@ class Bomb {
         this._body.restitution = 0.1;
         World.add(matter_engine.world, [this._body]);
 
+        this._inside_ground_rate = GROUND_COLLISION_RATE; // ms
+        this._inside_ground_timer = this._inside_ground_rate;
+        this._inside_ground = false;
+
         // TODO: rather than a total lifetime timer, make the timer begin when the bomb hits ground
     }
 
@@ -868,6 +924,25 @@ class Bomb {
         
         if (this._lifetime <= 0) {
             this.Destroy();
+        }
+
+        // If we found that this was stuck in the ground previously.
+        if (this._inside_ground) {
+            // Check again until out.
+            this._inside_ground = engine.PointInsideGround(this.x + Math.random(), this.y + this.radius*0.8);
+
+            // If stuck in the ground, move upwards.
+            // TODO: not an ideal solution, but it works for now.
+            if (this._inside_ground) {
+                Body.setPosition(this._body, {x:this.x - 0.01, y:this.y - 2});
+            }
+        } else {
+            // Every so often (this._inside_ground_rate ms) check if inside ground.
+            this._inside_ground_timer -= dT;
+            if (this._inside_ground_timer < 0) {
+                this._inside_ground_timer = this._inside_ground_rate;
+                this._inside_ground = engine.PointInsideGround(this.x + Math.random(), this.y + this.radius*0.8);
+            }
         }
 
         this.x = Sigs(this._body.position.x);
@@ -956,3 +1031,20 @@ let engine = new Engine_8Bomb();
 engine.NetSet();
 
 setTimeout(Tick, FPS);
+
+// Disconnect from clients before closing.
+function Destroy() {
+    console.log("Sending disconnect to all clients.");
+    network.Destroy();
+}
+
+process.on("SIGINT", function() {
+    Destroy();
+    console.log("Got SIGINT. Exiting.");
+    process.exit();
+});
+process.on("SIGTERM", function() {
+    Destroy();
+    console.log("Got SIGTERM. Exiting.");
+    process.exit();
+});

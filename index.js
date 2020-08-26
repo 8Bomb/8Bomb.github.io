@@ -1,5 +1,5 @@
 // Sky Hoffert
-// Main menu for 8Bomb game.
+// Main menu for 8Bomb.io.
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Setup //////////////////////////////////////////////////////////////////////////////////////////
@@ -70,6 +70,7 @@ let updates_num = 0;
 let updates_timer = 0;
 
 let textures_cache = {
+    loaded: false,
     ball_sprites: null,
 };
 
@@ -281,6 +282,9 @@ function CommenceStageAction(a) {
                 ui_menu = new UI_MainMenu();
                 loading_stage = null;
             }
+        } else if (tok[0] === "resume") {
+            console.log("Resuming play.");
+            ui_menu.Resume();
         }
     }
 }
@@ -463,7 +467,7 @@ class UI_Menu {
     constructor(s="NONE") {
         app.renderer.backgroundColor = color_scheme.bg;
         this._buttons = [];
-        this._selected_button = 0;
+        this._selected_button = -1;
         this._title_str = "NONE";
         this._KEY_TO_DIR = {"w":"N", "a":"W", "s":"S", "d":"E",
             "ArrowUp":"N", "ArrowLeft":"W", "ArrowDown":"S", "ArrowRight":"E"};
@@ -474,13 +478,17 @@ class UI_Menu {
         this._radio_buttons = [];
 
         this._title_str = s;
-        this._title_text = new PIXI.Text(this._title_str,
-            {fontFamily:"monospace", fontSize:100, fill:color_scheme.title, align:"center", fontWeight:"bold",
-            dropShadow:true, dropShadowAngle:Math.PI/4, dropShadowBlur:3, dropShadowColor:(color_scheme.title & 0xfefefe) >> 1});
-        this._title_text.position.set(WIDTH/2, 120);
-        this._title_text.anchor.set(0.5);
-        ui.addChild(this._title_text);
-        this._texts.push(this._title_text);
+        if (s === "NONE") {
+            this._title_text = null;
+        } else {
+            this._title_text = new PIXI.Text(this._title_str,
+                {fontFamily:"monospace", fontSize:100, fill:color_scheme.title, align:"center", fontWeight:"bold",
+                dropShadow:true, dropShadowAngle:Math.PI/4, dropShadowBlur:3, dropShadowColor:(color_scheme.title & 0xfefefe) >> 1});
+            this._title_text.position.set(WIDTH/2, 120);
+            this._title_text.anchor.set(0.5);
+            ui.addChild(this._title_text);
+            this._texts.push(this._title_text);
+        }
 
         this._fade_act = "none";
         this._fading = false;
@@ -524,7 +532,9 @@ class UI_Menu {
                 this._Select(this._button_transitions[this._selected_button][dir]);
             }
         } else if (k === "Enter") {
-            this._buttons[this._selected_button].Action();
+            if (this._selected_button !== -1) {
+                this._buttons[this._selected_button].Action();
+            }
         }
     }
 
@@ -657,7 +667,6 @@ class UI_MainMenu extends UI_Menu {
 
         this._selected_button = 0;
         this._buttons[this._selected_button].Select();
-        this._round_selection = false;
 
         this._button_transitions = {
             0: {E:2, S:1},
@@ -995,8 +1004,11 @@ app.ticker.add(Tick);
 // Events /////////////////////////////////////////////////////////////////////////////////////////
 
 document.addEventListener("keydown", function (evt) {
-    ui_menu.Key(evt.key, true);
-    keys[evt.key] = true;
+    // Don't continuously send data when holding down a key.
+    if (keys[evt.key] === false || !(evt.key in keys)) {
+        ui_menu.Key(evt.key, true);
+        keys[evt.key] = true;
+    }
 }, false);
 
 document.addEventListener("keyup", function (evt) {

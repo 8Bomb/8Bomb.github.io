@@ -1,5 +1,5 @@
 // Sky Hoffert
-// js for local play.
+// js for local play of 8Bomb.io.
 
 class Load_LocalPlay {
     constructor() {
@@ -64,9 +64,10 @@ class Load_LocalPlay {
     }
 }
 
-class UI_Online {
+class UI_Online extends UI_Menu {
     constructor() {
-        this.paused = false;
+        super("");
+        app.renderer.backgroundColor = MAP_COLORS[play_opts.map].bg;
         this._fade = 0;
         this._fade_alpha = 0.5;
 
@@ -75,9 +76,35 @@ class UI_Online {
         this._ping_text.position.set(WIDTH - 10, 14);
         this._ping_text.anchor.set(1, 0.5);
         ui.addChild(this._ping_text);
+        this._texts.push(this._ping_text);
+        
+        // button 0 and 1: back and play.
+        this._btn_width = 400;
+        this._btn_height = 140;
+        this._btn_rad = 20;
+        this._btn_fs = 30;
+        this._buttons.push(new UI_Button(
+            WIDTH/2, HEIGHT/2 - this._btn_height, this._btn_width, this._btn_height,
+            this._btn_rad, "Resume", this._btn_fs, "resume"));
+        this._buttons.push(new UI_Button(
+            WIDTH/2, HEIGHT/2 + this._btn_height, this._btn_width, this._btn_height,
+            this._btn_rad, "Main Menu", this._btn_fs, "open main-menu"));
+        
+        this._selected_button = 0;
+        this._buttons[this._selected_button].Select();
+        
+        this._button_transitions = {
+            0: {S:1},
+            1: {N:0},
+        };
+
+        this.paused = true;
+        this.Toggle();
     }
 
     Tick(dT) {
+        super.Tick(dT);
+
         if (this.paused) {
             if (this._fade < this._fade_alpha) {
                 this._fade += 0.05;
@@ -102,9 +129,22 @@ class UI_Online {
 
     Toggle() {
         this.paused = !this.paused;
+
+        if (this.paused) {
+            for (let i = 0; i < this._buttons.length; i++) {
+                this._buttons[i].Activate();
+            }
+        } else {
+            this._Select(0);
+            for (let i = 0; i < this._buttons.length; i++) {
+                this._buttons[i].Deactivate();
+            }
+        }
     }
 
     Draw() {
+        super.Draw();
+
         if (this._fade <= 0) { return; }
 
         ui_graphics_1.lineStyle(0);
@@ -134,21 +174,27 @@ class LocalPlay {
         this._clientID = -1;
 
         this._ui = new UI_Online();
-        
-        const loader = new PIXI.Loader(); // you can also create your own if you want
-        
-        // Chainable `add` to enqueue a resource
-        loader.add("balls", "gfx/ball_spritesheet.png");
-        
-        loader.load((loader, resources) => {
-            textures_cache.ball_sprites = new PIXI.Texture(resources.balls.texture);
-        });
-        
-        let self = this;
-        loader.onComplete.add(function () {
-            self._loaded = true;
-        });
+
         this._ids_to_apply_tex = [];
+        
+        if (textures_cache.loaded === false) {
+            const loader = new PIXI.Loader(); // you can also create your own if you want
+            
+            // Chainable `add` to enqueue a resource
+            loader.add("balls", "gfx/ball_spritesheet.png");
+            
+            loader.load((loader, resources) => {
+                textures_cache.ball_sprites = new PIXI.Texture(resources.balls.texture);
+            });
+            
+            let self = this;
+            loader.onComplete.add(function () {
+                self._loaded = true;
+                textures_cache.loaded = true;
+            });
+        } else {
+            this._loaded = true;
+        }
     }
 
     _ClearWorld() {
@@ -223,12 +269,6 @@ class LocalPlay {
                         console.log("Got good connection to server");
                         //console.log("color: " + rxp.spec.color);
                         this._connected = true;
-
-                        this._debug_text = new PIXI.Text("your color",
-                            {fontFamily:"monospace", fontSize:50, fill:rxp.spec.color, align:"left", fontWeight:"bold"});
-                        this._debug_text.position.set(20, 30);
-                        this._debug_text.anchor.set(0, 0.5);
-                        ui.addChild(this._debug_text);
                     } else {
                         console.log("FAILED. Connect got good=false.");
                         this._failed = true;
@@ -353,12 +393,22 @@ class LocalPlay {
         */
     }
 
+    Resume() {
+        this._ui.Toggle();
+    }
+
     AddExplosion(x, y, r) {
         this._gfx.push(new Draw_BombExplosion(x, y, r));
     }
 
     Destroy() {
+        this._ui.Destroy();
         this.Stop();
+        network.Destroy();
+
+        for (let k in this._objs) {
+            this._objs[k].Destroy();
+        }
     }
 
     Tick(dT) {
@@ -410,11 +460,15 @@ class LocalPlay {
         return this._ping !== -1 && this._connected && this._loaded;
     }
 
-    MouseMove(x, y) {}
+    MouseMove(x, y) {
+        if (this._ui.paused) {
+            this._ui.MouseMove(x, y);
+        }
+    }
     MouseDown(x, y, b) {
-        // TODO: move to engine.js
-        //const pt = viewport.toWorld(x, y);
-        //this.Bomb(pt.x, pt.y);
+        if (this._ui.paused) {
+            this._ui.MouseDown(x, y, b);
+        }
     }
     Key(k, d) {
         if (!this._connected) { return; }
@@ -425,6 +479,7 @@ class LocalPlay {
         }
 
         if (this._ui.paused) {
+            this._ui.Key(k, d);
             return;
         }
 
@@ -735,6 +790,9 @@ class Network {
         this._ws.onmessage = function (evt) {
             self._WSRecv(evt);
         }
+        this._ws.onclose = function (evt) {
+            self._WSClose(evt);
+        }
 
         this._measure_rx = 0;
         this._measure_tx = 0;
@@ -743,11 +801,13 @@ class Network {
     }
 
     Destroy() {
+        this._open = false;
         this._ws.close();
+        console.log("WS closed.");
     }
 
     _WSOpen(evt) {
-        console.log("WS opened");
+        console.log("WS opened.");
         this._open = true;
     }
 
@@ -771,6 +831,14 @@ class Network {
             this._measure_rx = 0;
             this._measure_tx = 0;
         }
+    }
+
+    _WSClose(evt) {
+        this._open = false;
+        this._ws.close();
+        console.log("WS closed by server.");
+
+        console.log("TODO: inform the client that the server stopped. Return to main.");
     }
 
     HasData() {
