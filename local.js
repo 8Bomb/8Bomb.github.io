@@ -1,6 +1,8 @@
 // Sky Hoffert
 // js for local play of 8Bomb.io.
 
+const { NewBomb } = require("./backend/engine");
+
 class Load_LocalPlay {
     constructor() {
         this._arcval = 0;
@@ -182,9 +184,11 @@ class LocalPlay {
             
             // Chainable `add` to enqueue a resource
             loader.add("balls", "gfx/ball_spritesheet.png");
+            loader.add("explosion", "gfx/explosion_spritesheet.png");
             
             loader.load((loader, resources) => {
                 textures_cache.ball_sprites = new PIXI.Texture(resources.balls.texture);
+                textures_cache.explosion_sprites = new PIXI.Texture(resources.explosion.texture);
             });
             
             let self = this;
@@ -450,6 +454,7 @@ class LocalPlay {
         for (let i = 0; i < this._gfx.length; i++) {
             this._gfx[i].Tick(dT);
             if (this._gfx[i].active === false) {
+                this._gfx[i].Destroy();
                 this._gfx.splice(i, 1);
                 i--;
             }
@@ -465,11 +470,13 @@ class LocalPlay {
             this._ui.MouseMove(x, y);
         }
     }
+
     MouseDown(x, y, b) {
         if (this._ui.paused) {
             this._ui.MouseDown(x, y, b);
         }
     }
+
     Key(k, d) {
         if (!this._connected) { return; }
 
@@ -659,8 +666,7 @@ class Draw_Bomb {
 
         this.active = true;
 
-        this._body = Bodies.circle(this.x, this.y, this.radius, 6);
-        this._body.restitution = 0.1;
+        this._body = NewBomb(this.x, this.y, this.radius);
         World.add(engine_local.world, [this._body]);
     }
 
@@ -704,27 +710,41 @@ class Draw_BombExplosion {
         this.type = "e";
 
         this.active = true;
+
+        this._sprite_textures = [];
+        this._sprite = null;
+        this.ApplyTexture();
     }
     
-    ApplyTexture() {}
+    ApplyTexture() {
+        if (this._sprite !== null) { return; }
 
-    Destroy() {}
+        for (let i = 0; i < 12; i++) {
+            this._sprite_textures.push(new PIXI.Texture(textures_cache.explosion_sprites,
+                new PIXI.Rectangle(128*i, 0, 128, 128)));
+        }
+        this._sprite = new PIXI.AnimatedSprite(this._sprite_textures);
+        this._sprite.position.set(this.x, this.y);
+        this._sprite.anchor.set(0.5);
+        this._sprite.width = this.radius*2;
+        this._sprite.height = this.radius*2;
+        this._sprite.loop = false;
+        this._sprite.animationSpeed = 0.2;
+        this._sprite.play();
+        stage.addChild(this._sprite);
+    }
+
+    Destroy() {
+        stage.removeChild(this._sprite);
+    }
 
     Tick(dT) {
-        this.radius *= 0.95;
-        this._alpha *= 0.95;
-
-        if (this.radius < 1) {
+        if (this._sprite.playing === false) {
             this.active = false;
         }
     }
 
-    Draw() {
-        stage_graphics.lineStyle(0);
-        stage_graphics.beginFill(this._color, this._alpha);
-        stage_graphics.drawCircle(this.x, this.y, this.radius);
-        stage_graphics.endFill();
-    }
+    Draw() {}
 }
 
 class Draw_Magma {

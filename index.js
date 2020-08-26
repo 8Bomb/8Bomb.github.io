@@ -72,6 +72,7 @@ let updates_timer = 0;
 let textures_cache = {
     loaded: false,
     ball_sprites: null,
+    explosion_sprites: null,
 };
 
 const FPS_LOG_RATE = 10000; // ms
@@ -185,11 +186,6 @@ xhr.onreadystatechange = function() {
         network_addr = "ws://localhost:5061";
     }
 };
-
-const Engine = Matter.Engine;
-const World = Matter.World;
-const Bodies = Matter.Bodies;
-const Body = Matter.Body;
 
 let network = null;
 //let engine_network = new Engine_8Bomb();

@@ -800,13 +800,19 @@ class UserBall {
         const str = Math.min(r - hyp / 1000000, 0.0001);
 
         if (hyp < r) {
-            Body.applyForce(this._body, {x:this.x, y:this.x}, 
+            Body.applyForce(this._body, {x:this.x, y:this.x},
                 {x: (this.x - x)*str, y: (this.y - y)*str});
         }
     }
 
     Tick(dT) {
-		if (!this.active) { return; }
+        if (!this.active) { return; }
+        
+        if (this._body.speed > 10) {
+            console.log("DEBUG had to reduce player velocity.");
+            Body.setVelocity(this._body, {x:this._body.velocity.x / this._body.speed,
+                y:this._body.velocity.y / this._body.speed});
+        }
 
         const grounded = engine.Collides(this._body);
 
@@ -889,14 +895,6 @@ class Bomb {
 		this.va = 0;
 		this.color = 0;
 
-        if (this.radius < 4) {
-            this._color = 0xf5ce42;
-        } else if (this.radius < 8) {
-            this._color = 0xf58a42;
-        } else {
-            this._color = 0xf55d42;
-        }
-
         this.active = true;
 
         this._lifetime = t;
@@ -906,8 +904,7 @@ class Bomb {
         this.active = true;
         this.type = "b";
         
-        this._body = Bodies.circle(this.x, this.y, this.radius, 6);
-        this._body.restitution = 0.1;
+        this._body = E8B.NewBomb(this.x, this.y, this.radius);
         World.add(matter_engine.world, [this._body]);
 
         this._inside_ground_rate = GROUND_COLLISION_RATE; // ms
@@ -956,9 +953,6 @@ class Bomb {
         if (!this.active) { return; }
 
         World.remove(matter_engine.world, [this._body]);
-
-        // TODO: needs to be moved to front end
-        //ui_menu.AddExplosion(new BombExplosion(this.x, this.y, this._explosion_radius, this._color));
 
         engine.Bomb(this.x, this.y, this._explosion_radius);
 
