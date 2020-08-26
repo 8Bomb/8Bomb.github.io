@@ -1,34 +1,52 @@
 // Sky Hoffert
 // Back end for 8Bomb.io.
 
-console.log("starting.");
+console.log("Starting 8Bomb backend.");
 
 const fs = require("fs");
 const http = require("http");
 const https = require("https");
 const SocketServer = require("ws").Server;
 
+const Matter = require("matter-js");
+const FMATH = require("fmath");
+const fmath = new FMATH();
+const E8B = require("./engine");
+
+const Engine = Matter.Engine;
+const World = Matter.World;
+const Bodies = Matter.Bodies;
+const Body = Matter.Body;
+
+const DEFAULT_PORT = 5061;
+const PORT = process.argv.length === 3 ? parseInt(process.argv[2], 10) : DEFAULT_PORT;
+if (PORT === NaN) {
+    console.log("ERR. Caught error with parsing port num.");
+    process.exit();
+}
+
 let LOCAL = true;
 try {
 	if (fs.existsSync("./LOCAL")) {
-		console.log("Running on local server.");
+		console.log("Running on local server, port " + PORT + ".");
 		LOCAL = true;
 	} else {
-		console.log("Running on the www.");
+		console.log("Running on the www, port " + PORT + ".");
 		LOCAL = false;
 	}
 } catch (err) {
 	console.log("ERR. Caught an err with existsSync.");
+    process.exit();
 }
 
 var credentials = null;
 if (!LOCAL) {
-	const privateKey  = fs.readFileSync('/etc/letsencrypt/live/skyhoffert-backend.com/privkey.pem', 'utf8');
-	const certificate = fs.readFileSync('/etc/letsencrypt/live/skyhoffert-backend.com/fullchain.pem', 'utf8');
+	const privateKey  = fs.readFileSync("/etc/letsencrypt/live/skyhoffert-backend.com/privkey.pem", "utf8");
+	const certificate = fs.readFileSync("/etc/letsencrypt/live/skyhoffert-backend.com/fullchain.pem", "utf8");
 	credentials = {key: privateKey, cert: certificate};
 }
  
-var express = require('express');
+var express = require("express");
 var app = express();
  
 //... bunch of other express stuff here ...
@@ -40,7 +58,7 @@ if (!LOCAL) {
 } else {
 	server = http.createServer(app);
 }
-server.listen(5060);
+server.listen(PORT);
 
 const wss = new SocketServer({ server : server });
 
@@ -50,18 +68,10 @@ console.log("listening.");
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Engine! ////////////////////////////////////////////////////////////////////////////////////////
 
-const Matter = require("matter-js");
-const LZUTF8 = require("lzutf8");
-const FMATH = require("fmath");
-const fmath = new FMATH();
-
-const Engine = Matter.Engine;
-const World = Matter.World;
-const Bodies = Matter.Bodies;
-const Body = Matter.Body;
-
 const matter_engine = Engine.create();
 matter_engine.world.gravity.y = 0.2;
+
+// A way to pause the ENTIRE engine.
 //matter_engine.timing.timeScale = 0;
 
 let prevTime = Date.now();
@@ -77,7 +87,7 @@ function Tick() {
     tick_timer += dT;
     tick_frames++;
     if (tick_timer > FPS_LOG_RATE) {
-        console.log("fps: " + Sigs(tick_frames / tick_timer * 1000));
+        console.log("fps: " + E8B.Sigs(tick_frames / tick_timer * 1000));
         tick_timer = 0;
         tick_frames = 0;
     }
@@ -85,14 +95,6 @@ function Tick() {
 	Engine.update(matter_engine, dT);
 
 	engine.Tick(dT);
-}
-
-function Sigs(n, dig=3) {
-    return Math.round(n * Math.pow(10, dig)) / 1000;
-}
-
-function RandomColor() {
-	return '#'+(Math.random() * 0xFFFFFF << 0).toString(16).padStart(6, '0');
 }
 
 const ENGINE_WIDTH = 1200;
@@ -128,7 +130,7 @@ class Network {
 
 	Connection(evt) {
 		console.log("Got new connection");
-		const cid = GenRequestID(8);
+		const cid = E8B.GenRequestID(8);
 		this._conns[cid] = {connection: evt, id: cid};
 		let self = this;
 		evt.on("close", function (evt) {
@@ -138,9 +140,9 @@ class Network {
 			self.Message(evt, cid);
 		});
 
-		evt.send(LZUTF8.compress(JSON.stringify({
+		evt.send(E8B.Compress(JSON.stringify({
 			type: "open-response",
-			resID: GenRequestID(6),
+			resID: E8B.GenRequestID(6),
 			spec: {
 				cID: cid,
 			},
@@ -155,12 +157,12 @@ class Network {
 
 	Message(evt) {
         this._measure_rx += evt.length;
-		const msg = LZUTF8.decompress(evt, {inputEncoding:"Base64"});
+		const msg = E8B.Decompress(evt);
         this._rxQ.push({id:"", data:msg});
 	}
 	
     ServerSend(msg, id="") {
-        const msgc = LZUTF8.compress(msg, {outputEncoding:"Base64"});
+        const msgc = E8B.Compress(msg);
         const len = msgc.length;
 		if (id === "") {
 			for (let k in this._conns) {
@@ -179,8 +181,8 @@ class Network {
             const elapsed = now - this._measure_timer;
             this._measure_timer = now;
 
-            const rx_kbps = Sigs(this._measure_rx / elapsed * 8);
-            const tx_kbps = Sigs(this._measure_tx / elapsed * 8);
+            const rx_kbps = E8B.Sigs(this._measure_rx / elapsed * 8);
+            const tx_kbps = E8B.Sigs(this._measure_tx / elapsed * 8);
 
             console.log("" + rx_kbps + " kbps down, " + tx_kbps + " kbps up");
 
@@ -273,9 +275,9 @@ class Engine_8Bomb {
     }
 
     _NewID(n) {
-        let id = GenRequestID(n);
+        let id = E8B.GenRequestID(n);
         while (id in this._objs) {
-            id = GenRequestID(n);
+            id = E8B.GenRequestID(n);
         }
         return id;
     }
@@ -314,7 +316,7 @@ class Engine_8Bomb {
 		if (cid !== "" ) {
 			network.ServerSend(JSON.stringify({
 				type: "8B",
-				resID: GenRequestID(6),
+				resID: E8B.GenRequestID(6),
 				spec: {
 					a: "cw"
 				},
@@ -333,7 +335,7 @@ class Engine_8Bomb {
 
 			network.ServerSend(JSON.stringify({
 				type: "8B",
-				resID: GenRequestID(6),
+				resID: E8B.GenRequestID(6),
 				spec: msg_8B,
 			}), cid);
 		} else {
@@ -378,20 +380,19 @@ class Engine_8Bomb {
 
         network.ServerSend(JSON.stringify({
             type: "8B",
-            resID: GenRequestID(6),
+            resID: E8B.GenRequestID(6),
             spec: msg_8B,
         }));
     }
 
     Start() {
         console.log("ADMIN: starting engine.");
-		//matter_engine.timing.timeScale = 1;
 		this.bomb_spawning = true;
 
 		// Send start signal to all clients.
 		network.ServerSend(JSON.stringify({
 			type: "8B",
-			resID: GenRequestID(6),
+			resID: E8B.GenRequestID(6),
 			spec: {
 				a: "str",
 			}
@@ -400,7 +401,6 @@ class Engine_8Bomb {
 
     Stop() {
         console.log("ADMIN: stopping engine.");
-        // matter_engine.timing.timeScale = 0;
 		this.bomb_spawning = true;
     }
     
@@ -455,7 +455,7 @@ class Engine_8Bomb {
 				if (rxp.type === "ping") {
 					network.ServerSend(JSON.stringify({
 						type: "pong",
-						resID: GenRequestID(6),
+						resID: E8B.GenRequestID(6),
 						spec: {
 							reqID: rxp.reqID,
 							tsent: rxp.spec.tsent,
@@ -465,7 +465,7 @@ class Engine_8Bomb {
 					if (rxp.spec.game === "8Bomb" && rxp.spec.version === "0.1") {
 						network.ServerSend(JSON.stringify({
 							type: "check-response",
-							resID: GenRequestID(6),
+							resID: E8B.GenRequestID(6),
 							spec: {
 								reqID: rxp.reqID,
 								good: true,
@@ -475,7 +475,7 @@ class Engine_8Bomb {
 						console.log("Server got a check with bad game or version");
 						network.ServerSend(JSON.stringify({
 							type: "check-response",
-							resID: GenRequestID(6),
+							resID: E8B.GenRequestID(6),
 							spec: {
 								reqID: rxp.reqID,
 								good: false,
@@ -503,7 +503,7 @@ class Engine_8Bomb {
 
 					network.ServerSend(JSON.stringify({
 						type: "connect-response",
-						resID: GenRequestID(6),
+						resID: E8B.GenRequestID(6),
 						spec: {
 							reqID: rxp.reqID,
 							good: true,
@@ -553,16 +553,18 @@ class Engine_8Bomb {
 			let wasactive = o.active;
             o.Tick(dT);
 
+            // If an object was just killed.
             if (wasactive && o.active === false) {
 				if (o.type === "u") {
-					// TODO: better way
+                    // And if that object was a player, tell them that they died.
 					o.Destroy();
 					
+					// TODO: better way? Seems inefficient?
 					for (let c in this._clients) {
 						if (this._clients[c].id === k) {
 							network.ServerSend(JSON.stringify({
 								type: "8B",
-								resID: GenRequestID(6),
+								resID: E8B.GenRequestID(6),
 								spec: {
 									a: "yd",
 									i: k,
@@ -582,8 +584,6 @@ class Engine_8Bomb {
             this._update_time = 0;
             this._UpdateClient();
         }
-
-        //console.log("DEBUG nID: " + Object.keys(this._objs).length + ", b+: " + this._bomb_added + ", b-: " + this._bomb_removed);
     }
     
     Collides(b) {
@@ -861,12 +861,12 @@ class UserBall {
             }
         }
 
-        this.x = Sigs(this._body.position.x);
-        this.y = Sigs(this._body.position.y);
-        this.vx = Sigs(this._body.velocity.x);
-        this.vy = Sigs(this._body.velocity.y);
-        this.va = Sigs(this._body.angularVelocity);
-        this.angle = Sigs(this._body.angle);
+        this.x = E8B.Sigs(this._body.position.x);
+        this.y = E8B.Sigs(this._body.position.y);
+        this.vx = E8B.Sigs(this._body.velocity.x);
+        this.vy = E8B.Sigs(this._body.velocity.y);
+        this.va = E8B.Sigs(this._body.angularVelocity);
+        this.angle = E8B.Sigs(this._body.angle);
 
         // Conditions for killing a player.
 		if (this.y > ENGINE_HEIGHT) {
@@ -945,11 +945,11 @@ class Bomb {
             }
         }
 
-        this.x = Sigs(this._body.position.x);
-        this.y = Sigs(this._body.position.y);
-        this.vx = Sigs(this._body.velocity.x);
-        this.vy = Sigs(this._body.velocity.y);
-        this.va = Sigs(this._body.angularVelocity);
+        this.x = E8B.Sigs(this._body.position.x);
+        this.y = E8B.Sigs(this._body.position.y);
+        this.vx = E8B.Sigs(this._body.velocity.x);
+        this.vy = E8B.Sigs(this._body.velocity.y);
+        this.va = E8B.Sigs(this._body.angularVelocity);
     }
 
     Destroy() {
@@ -1021,10 +1021,6 @@ class Magma {
     Contains(x, y) {
         return x > this.left && x < this.right && y > this.top && y < this.bottom;
     }
-}
-
-function GenRequestID(n) {
-    return Math.round((Math.pow(36, n + 1) - Math.random() * Math.pow(36, n))).toString(36).slice(1);
 }
 
 let engine = new Engine_8Bomb();

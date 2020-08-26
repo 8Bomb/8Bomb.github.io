@@ -838,7 +838,7 @@ class Network {
         this._ws.close();
         console.log("WS closed by server.");
 
-        console.log("TODO: inform the client that the server stopped. Return to main.");
+        console.log("TODO: inform the client that the server stopped (if not already). Return to main.");
     }
 
     HasData() {
@@ -849,7 +849,7 @@ class Network {
         if (this._rxQ.length > 0) {
             const r = this._rxQ[0];
             this._rxQ.splice(0, 1);
-            return LZUTF8.decompress(r, {inputEncoding:"Base64"});
+            return Decompress(r);
         }
         return "";
     }
@@ -857,7 +857,7 @@ class Network {
     ClientSend(msg) {
         if (!this._open) { return; }
 
-        const msgc = LZUTF8.compress(msg, {outputEncoding:"Base64"});
+        const msgc = Compress(msg);
         this._ws.send(msgc);
         this._measure_tx += msgc.length;
     }

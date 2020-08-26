@@ -47,12 +47,12 @@ const MAP_COLORS = {
         bomb: 0xCE8F36,
         magma: 0xF05B52,
     }
-}
+};
 const BOMB_COLORS = {
     Dynamite: {
         main: 0xF05B52,
     }
-}
+};
 let color_scheme = COLORS.GRAND_CANYON;
 
 const app = new PIXI.Application({
@@ -101,8 +101,6 @@ function Tick() {
         stage_actions.splice(i, 1);
         i--;
     }
-
-    engine_network.Tick(dT);
 
     // Ticking
     ui_menu.Tick(dT);
@@ -175,7 +173,7 @@ let loading_stage = null;
 
 // TODO: add for local play
 //let network = new LocalNetworkEmulator();
-let network_addr = "wss://skyhoffert-backend.com:5060"
+let network_addr = "wss://skyhoffert-backend.com:5061";
 
 // If there is a file in the backend folder named LOCAL - use a local server.
 // For development purposes.
@@ -184,12 +182,17 @@ xhr.open("HEAD", "backend/LOCAL");
 xhr.send();
 xhr.onreadystatechange = function() {
     if (this.status === 200) {
-        network_addr = "ws://localhost:5060";
+        network_addr = "ws://localhost:5061";
     }
-}
+};
+
+const Engine = Matter.Engine;
+const World = Matter.World;
+const Bodies = Matter.Bodies;
+const Body = Matter.Body;
 
 let network = null;
-let engine_network = new Engine_8Bomb();
+//let engine_network = new Engine_8Bomb();
 
 let engine_local = Engine.create();
 engine_local.world.gravity.y = 0.2;
@@ -293,18 +296,6 @@ function UpdateColorScheme(c) {
     color_scheme = COLORS[c];
     app.renderer.backgroundColor = color_scheme.bg;
     ui_menu.UpdateColorScheme();
-}
-
-function DarkenColor(c) {
-    return (c & 0xfefefe) >> 1;
-}
-
-function RandomColor() {
-	return '#'+(Math.random() * 0xFFFFFF << 0).toString(16).padStart(6, '0');
-}
-
-function Sigs(n, dig=3) {
-    return Math.round(n * Math.pow(10, dig)) / Math.pow(10, dig);
 }
 
 // Functions //////////////////////////////////////////////////////////////////////////////////////
@@ -822,7 +813,7 @@ of new, exciting games :)";
         this._button_transitions = {
             0: {E:1},
             1: {W:0}
-        }
+        };
     }
 }
 
@@ -944,7 +935,7 @@ class UI_LocalPlay extends UI_Menu {
             9: {N:6, E:10},
             10: {N:7, W:9, E:11},
             11: {N:8, W:10},
-        }
+        };
     }
 }
 
@@ -976,7 +967,7 @@ class UI_OnlinePlay extends UI_Menu {
         this._button_transitions = {
             0: {E:1},
             1: {W:0}
-        }
+        };
 
         this._about_str = "Online play is currently under development.\n\n\
 Please donate to support this effort!\n\n\
