@@ -174,7 +174,7 @@ let loading_stage = null;
 
 // TODO: add for local play
 //let network = new LocalNetworkEmulator();
-let network_addr = "wss://skyhoffert-backend.com:5061";
+let network_addr = "wss://skyhoffert-backend.com:5060";
 
 // If there is a file in the backend folder named LOCAL - use a local server.
 // For development purposes.
@@ -183,7 +183,7 @@ xhr.open("HEAD", "backend/LOCAL");
 xhr.send();
 xhr.onreadystatechange = function() {
     if (this.status === 200) {
-        network_addr = "ws://localhost:5061";
+        network_addr = "ws://localhost:5060";
     }
 };
 
@@ -216,6 +216,7 @@ function CommenceStageAction(a) {
             } else if (tok[1] === "local-play") {
                 ui_menu = new UI_LocalPlay();
             } else if (tok[1] === "online-play") {
+                network = new Network(network_addr);
                 ui_menu = new UI_OnlinePlay();
             } else if (tok[1] === "create-server") {
                 ui_menu = new UI_CreateServer();
@@ -997,6 +998,195 @@ class UI_OnlinePlay extends UI_Menu {
             0: {E:1},
             1: {W:0}
         };
+
+        this._ping_timer = PING_RATE;
+        this._ping = -1;
+
+        // Ping is shown in the bottom right (mostly for debugging).
+        this._ping_text = new PIXI.Text("- ms",
+            {fontFamily:"monospace", fontSize:14, fill:0xffffff, align:"right"});
+        this._ping_text.position.set(WIDTH - 10, HEIGHT - 14);
+        this._ping_text.anchor.set(1, 0.5);
+        ui.addChild(this._ping_text);
+        this._texts.push(this._ping_text);
+
+        // List vars, some used for drawing.
+        this._list_left_bound = WIDTH * 0.05;
+        this._list_width = WIDTH * 0.9;
+        this._list_height = HEIGHT - 300;
+        this._list_right_bound = this._list_left_bound + this._list_width;
+        this._list_label_fs = 20;
+        
+        this._lobby_name_text = new PIXI.Text("Lobby Name",
+            {fontFamily:"monospace", fontSize:this._list_label_fs, fill:color_scheme.text, align:"left"});
+        this._lobby_name_text.position.set(this._list_left_bound + 20, 230);
+        this._lobby_name_text.anchor.set(0, 0.5);
+        ui.addChild(this._lobby_name_text);
+        this._texts.push(this._lobby_name_text);
+
+        this._list_ping_left = this._list_right_bound - 100;
+        this._list_ping_text_left = this._list_ping_left + 20;
+        this._list_ping_text = new PIXI.Text("Ping",
+            {fontFamily:"monospace", fontSize:this._list_label_fs, fill:color_scheme.text, align:"left"});
+        this._list_ping_text.position.set(this._list_ping_text_left, 230);
+        this._list_ping_text.anchor.set(0, 0.5);
+        ui.addChild(this._list_ping_text);
+        this._texts.push(this._list_ping_text);
+        
+        this._list_private_left = this._list_ping_left - 120;
+        this._list_private_text_left = this._list_private_left + 20;
+        this._list_private_text = new PIXI.Text("Private?",
+            {fontFamily:"monospace", fontSize:this._list_label_fs, fill:color_scheme.text, align:"left"});
+        this._list_private_text.position.set(this._list_private_text_left, 230);
+        this._list_private_text.anchor.set(0, 0.5);
+        ui.addChild(this._list_private_text);
+        this._texts.push(this._list_private_text);
+        
+        this._list_players_left = this._list_private_left - 120;
+        this._list_players_text_left = this._list_players_left + 20;
+        this._list_players_text = new PIXI.Text("Players",
+            {fontFamily:"monospace", fontSize:this._list_label_fs, fill:color_scheme.text, align:"left"});
+        this._list_players_text.position.set(this._list_players_text_left, 230);
+        this._list_players_text.anchor.set(0, 0.5);
+        ui.addChild(this._list_players_text);
+        this._texts.push(this._list_players_text);
+        
+        this._list_map_left = this._list_players_left - 160;
+        this._list_map_text_left = this._list_map_left + 20;
+        this._list_map_text = new PIXI.Text("Map",
+            {fontFamily:"monospace", fontSize:this._list_label_fs, fill:color_scheme.text, align:"left"});
+        this._list_map_text.position.set(this._list_map_text_left, 230);
+        this._list_map_text.anchor.set(0, 0.5);
+        ui.addChild(this._list_map_text);
+        this._texts.push(this._list_map_text);
+
+        this._clientID = "";
+        this._checked = false;
+
+        this._net_failed = false;
+    }
+
+    _UpdatePing(p) {
+        this._ping = p;
+        this._ping_text.text = "" + p + " ms";
+    }
+
+    _PingServer() {
+        network.ClientSend(JSON.stringify({
+            type: "ping",
+            reqID: GenRequestID(6),
+            spec: {
+                tsent: Sigs(window.performance.now()),
+                cID: this._clientID,
+            },
+        }));
+    }
+
+    _HandleNetwork() {
+        while (network.HasData()) {
+            const rx = network.ClientRecv();
+            if (rx !== "") {
+                let rxp = {};
+                try {
+                    rxp = JSON.parse(rx);
+                } catch {
+                    console.log("ERR. Could not parse rx message in client.");
+                }
+
+                if (rxp.type === "pong") {
+                    const now = window.performance.now();
+                    this._ping = now - parseFloat(rxp.spec.tsent);
+                    this._UpdatePing(Sigs(this._ping, 0));
+                } else if (rxp.type === "open-response") {
+                    this._clientID = rxp.spec.cID;
+                    console.log("Given client ID " + this._clientID);
+
+                    // Whie loading, make a ping request.
+                    this._PingServer();
+            
+                    // While loading, make a connection request.
+                    network.ClientSend(JSON.stringify({
+                        type: "check",
+                        reqID: GenRequestID(6),
+                        spec: {
+                            game: "8Bomb",
+                            version: "0.1",
+                            cID: this._clientID,
+                        },
+                    }));
+                } 
+            } else if (rxp.type === "check-response") {
+                if (rxp.spec.good === true) {
+                    this._checked = true;
+                    console.log("got good server check.");
+                } else {
+                    console.log("Failed server check!!");
+                }
+            }
+        }
+    }
+
+    Tick(dT) {
+        super.Tick(dT);
+
+        if (this._net_failed) { return; }
+
+        this._HandleNetwork();
+
+        this._ping_timer -= dT;
+        if (this._ping_timer < 0) {
+            this._ping_timer = PING_RATE;
+            this._PingServer();
+        }
+
+        if (network.failed) {
+            this._net_failed = true;
+            
+            this._failed_text = new PIXI.Text("Connection to server failed. Retry later.",
+                {fontFamily:"monospace", fontSize:36, fill:color_scheme.fill, align:"center"});
+            this._failed_text.position.set(WIDTH/2, HEIGHT/2);
+            this._failed_text.anchor.set(0.5);
+            ui.addChild(this._failed_text);
+            this._texts.push(this._failed_text);
+        }
+    }
+
+    Destroy() {
+        super.Destroy();
+
+        network.Destroy();
+        network = null;
+    }
+
+    Draw() {
+        super.Draw();
+
+        ui_graphics_1.lineStyle(0);
+        ui_graphics_1.beginFill(color_scheme.text);
+        ui_graphics_1.drawRect(this._list_left_bound, 250, this._list_width, 4);
+        ui_graphics_1.endFill();
+
+        ui_graphics_1.beginFill(color_scheme.text);
+        ui_graphics_1.drawRect(this._list_ping_left, 210, 4, this._list_height);
+        ui_graphics_1.endFill();
+        
+        ui_graphics_1.beginFill(color_scheme.text);
+        ui_graphics_1.drawRect(this._list_private_left, 210, 4, this._list_height);
+        ui_graphics_1.endFill();
+        
+        ui_graphics_1.beginFill(color_scheme.text);
+        ui_graphics_1.drawRect(this._list_players_left, 210, 4, this._list_height);
+        ui_graphics_1.endFill();
+        
+        ui_graphics_1.beginFill(color_scheme.text);
+        ui_graphics_1.drawRect(this._list_map_left, 210, 4, this._list_height);
+        ui_graphics_1.endFill();
+
+        if (this._net_failed) {
+            ui_graphics_1.beginFill(color_scheme.misc);
+            ui_graphics_1.drawRoundedRect(this._list_left_bound, HEIGHT/2 - 24, this._list_width, 48);
+            ui_graphics_1.endFill();
+        }
     }
 }
 
@@ -1029,7 +1219,7 @@ class UI_CreateServer extends UI_Menu {
             1: {W:0}
         };
         
-        this._about_str = "Online play is currently under development.\n\n\
+        this._about_str = "Create Server is currently under development.\n\n\
 Please donate to support this effort!\n\n\
 We look forward to dodging bombs with you!";
         this._about_text = new PIXI.Text(this._about_str,

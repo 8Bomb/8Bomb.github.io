@@ -171,7 +171,7 @@ class LocalPlay {
         this._checked = false;
         this._loaded = false;
 
-        this._clientID = -1;
+        this._clientID = "";
 
         this._ui = new UI_Online();
 
@@ -208,7 +208,6 @@ class LocalPlay {
     }
 
     _HandleNetwork() {
-        // Handle network.
         while (network.HasData()) {
             const rx = network.ClientRecv();
             if (rx !== "") {
@@ -222,7 +221,7 @@ class LocalPlay {
                 if (rxp.type === "pong") {
                     const now = window.performance.now();
                     this._ping = now - parseFloat(rxp.spec.tsent);
-                    //console.log("ping: " + Sigs(this._ping) + " ms");
+                    console.log("ping: " + Sigs(this._ping) + " ms");
                     this._ui.SetPing(Sigs(this._ping, 0));
                 } else if (rxp.type === "open-response") {
                     this._clientID = rxp.spec.cID;
@@ -917,6 +916,7 @@ class Network {
         this._rxQ = [];
 
         this._open = false;
+        this.failed = false;
 
         this._ws = new WebSocket(this._addr);
         let self = this;
@@ -928,6 +928,9 @@ class Network {
         }
         this._ws.onclose = function (evt) {
             self._WSClose(evt);
+        }
+        this._ws.onerror = function (evt) {
+            self._WSError(evt);
         }
 
         this._measure_rx = 0;
@@ -975,6 +978,10 @@ class Network {
         console.log("WS closed by server.");
 
         console.log("TODO: inform the client that the server stopped (if not already). Return to main.");
+    }
+
+    _WSError(evt) {
+        this.failed = true;
     }
 
     HasData() {

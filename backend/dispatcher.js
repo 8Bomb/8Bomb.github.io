@@ -76,7 +76,7 @@ function Tick() {
         tick_frames = 0;
     }
 
-    engine.Tick(dT);
+    dispatcher.Tick(dT);
 }
 
 const FPS = 1000/60;
@@ -114,7 +114,7 @@ class Dispatcher {
 				} catch (err) {
 					console.log("ERR. Could not parse rx message in client.");
 					return;
-				}
+                }
 
 				if (rxp.type === "ping") {
 					network.ServerSend(JSON.stringify({
@@ -125,7 +125,28 @@ class Dispatcher {
 							tsent: rxp.spec.tsent,
 						},
 					}), rxp.spec.cID);
-                }
+                } else if (rxp.type === "check") {
+					if (rxp.spec.game === "8Bomb" && rxp.spec.version === "0.1") {
+						network.ServerSend(JSON.stringify({
+							type: "check-response",
+							resID: E8B.GenRequestID(6),
+							spec: {
+								reqID: rxp.reqID,
+								good: true,
+							}
+						}), rxp.spec.cID);
+					} else {
+						console.log("Server got a check with bad game or version");
+						network.ServerSend(JSON.stringify({
+							type: "check-response",
+							resID: E8B.GenRequestID(6),
+							spec: {
+								reqID: rxp.reqID,
+								good: false,
+							}
+						}), rxp.spec.cID);
+					}
+				} 
             }
         }
     }
@@ -134,6 +155,8 @@ class Dispatcher {
 let dispatcher = new Dispatcher();
 let network = new NET.Network(wss, dispatcher.ActionQueue());
 dispatcher.NetSet();
+
+setTimeout(Tick, FPS);
 
 // Disconnect from clients before closing.
 function Destroy() {
