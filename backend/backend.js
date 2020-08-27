@@ -11,7 +11,9 @@ const SocketServer = require("ws").Server;
 const Matter = require("matter-js");
 const FMATH = require("fmath");
 const fmath = new FMATH();
+
 const E8B = require("./engine");
+const NET = require("./network");
 
 const Engine = Matter.Engine;
 const World = Matter.World;
@@ -48,8 +50,6 @@ if (!LOCAL) {
  
 var express = require("express");
 var app = express();
- 
-//... bunch of other express stuff here ...
  
 //pass in your express app and credentials to create an https server
 var server = null;
@@ -111,110 +111,6 @@ const play_opts = {
 	bomb_factor: 1,
 };
 
-class Network {
-	constructor(s) {
-		this._server = s;
-		this._conns = {};
-		this._rxQ = [];
-
-		let self = this;
-		this._server.on("connection", function (evt) {
-			self.Connection(evt);
-        });
-        
-        this._measure_rx = 0;
-        this._measure_tx = 0;
-        this._measure_timer = Date.now();
-        this._measure_ticks = 0;
-	}
-
-	Connection(evt) {
-		console.log("Got new connection");
-		const cid = E8B.GenRequestID(8);
-		this._conns[cid] = {connection: evt, id: cid};
-		let self = this;
-		evt.on("close", function (evt) {
-			self.Close(evt, cid);
-		});
-		evt.on("message", function (evt) {
-			self.Message(evt, cid);
-		});
-
-		evt.send(E8B.Compress(JSON.stringify({
-			type: "open-response",
-			resID: E8B.GenRequestID(6),
-			spec: {
-				cID: cid,
-			},
-		}), {outputEncoding:"Base64"}));
-	}
-
-	Close(evt, cid) {
-        engine.RemoveClient(cid);
-        delete this._conns[cid];
-        console.log("connection to client " + cid + " closed.");
-	}
-
-	Message(evt) {
-        this._measure_rx += evt.length;
-		const msg = E8B.Decompress(evt);
-        this._rxQ.push({id:"", data:msg});
-	}
-	
-    ServerSend(msg, id="") {
-        const msgc = E8B.Compress(msg);
-        const len = msgc.length;
-		if (id === "") {
-			for (let k in this._conns) {
-                this._conns[k].connection.send(msgc);
-                this._measure_tx += len;
-			}
-		} else {
-			this._conns[id].connection.send(msgc);
-            this._measure_tx += len;
-        }
-
-        // Keep track of data rate every 100 send messages.
-        this._measure_ticks++;
-        if (this._measure_ticks > 100) {
-            const now = Date.now();
-            const elapsed = now - this._measure_timer;
-            this._measure_timer = now;
-
-            const rx_kbps = E8B.Sigs(this._measure_rx / elapsed * 8);
-            const tx_kbps = E8B.Sigs(this._measure_tx / elapsed * 8);
-
-            console.log("" + rx_kbps + " kbps down, " + tx_kbps + " kbps up");
-
-            this._measure_ticks = 0;
-            this._measure_rx = 0;
-            this._measure_tx = 0;
-        }
-    }
-
-    ServerRecv() {
-		let resp = {id:"", data:""};
-        if (this._rxQ.length > 0) {
-            resp = this._rxQ[0];
-            this._rxQ.splice(0, 1);
-        }
-        return resp;
-	}
-	
-	HasData() {
-		return this._rxQ.length !== 0;
-    }
-    
-    Destroy() {
-        while (this._conns.length > 0) {
-            this._conns[0].connection.close();
-            this._conns.splice(0, 1);
-        }
-    }
-}
-
-let network = new Network(wss);
-
 class Engine_8Bomb {
     constructor() {
         this._objs = {};
@@ -248,6 +144,8 @@ class Engine_8Bomb {
 		
         this._magma = -1;
         this._bomb_spawner = -1;
+
+        this._actionQ = [];
 
         this._CreateWorld();
     }
@@ -384,6 +282,12 @@ class Engine_8Bomb {
             spec: msg_8B,
         }));
     }
+    
+    _RemoveClient(cid) {
+        this._rmQ.push(this._clients[cid].id);
+        delete this._clients[cid];
+        console.log("Removing client " + cid + " from world.");
+    }
 
     Start() {
         console.log("ADMIN: starting engine.");
@@ -403,12 +307,8 @@ class Engine_8Bomb {
         console.log("ADMIN: stopping engine.");
 		//this.bomb_spawning = true;
     }
-    
-    RemoveClient(cid) {
-        this._rmQ.push(this._clients[cid].id);
-        delete this._clients[cid];
-        console.log("Removing client " + cid + " from world.");
-    }
+
+    ActionQueue() { return this._actionQ; }
 	
 	NetSet() {
 		this._net_set = true;
@@ -547,6 +447,13 @@ class Engine_8Bomb {
     }
 
     Tick(dT) {
+        while (this._actionQ.length > 0) {
+            if (this._actionQ[0].type === "remove-client") {
+                this._RemoveClient(this._actionQ[0].cid);
+            }
+            this._actionQ.splice(0, 1);
+        }
+
         this._HandleNetwork();
 
         for (let k in this._objs) {
@@ -781,6 +688,8 @@ class UserBall {
         this._inside_ground_rate = GROUND_COLLISION_RATE; // ms
         this._inside_ground_timer = this._inside_ground_rate;
         this._inside_ground = false;
+
+        this._max_speed = 15;
     }
 
     Key(k, d) {
@@ -809,10 +718,10 @@ class UserBall {
     Tick(dT) {
         if (!this.active) { return; }
         
-        if (this._body.speed > 10) {
+        if (this._body.speed > this._max_speed) {
             console.log("DEBUG had to reduce player velocity.");
-            Body.setVelocity(this._body, {x:this._body.velocity.x / this._body.speed,
-                y:this._body.velocity.y / this._body.speed});
+            Body.setVelocity(this._body, {x:this._body.velocity.x / this._body.speed * this._max_speed,
+                y:this._body.velocity.y / this._body.speed * this._max_speed});
         }
 
         const grounded = engine.Collides(this._body);
@@ -1021,6 +930,7 @@ class Magma {
 }
 
 let engine = new Engine_8Bomb();
+let network = new NET.Network(wss, engine.ActionQueue());
 engine.NetSet();
 
 setTimeout(Tick, FPS);

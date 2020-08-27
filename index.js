@@ -215,9 +215,10 @@ function CommenceStageAction(a) {
                 ui_menu = new UI_About();
             } else if (tok[1] === "local-play") {
                 ui_menu = new UI_LocalPlay();
-                // TODO: something about the network?
             } else if (tok[1] === "online-play") {
                 ui_menu = new UI_OnlinePlay();
+            } else if (tok[1] === "create-server") {
+                ui_menu = new UI_CreateServer();
             }
         } else if (tok[0] === "soundfx") {
             console.log("TODO: turn sfx " + tok[1]);
@@ -226,7 +227,9 @@ function CommenceStageAction(a) {
             console.log("TODO: turn music " + tok[1]);
             playing_music = tok[1] === "on";
         } else if (tok[0] === "donate") {
-            window.location = "https://paypal.me/skyhoffert";
+            //window.location = "https://paypal.me/skyhoffert";
+            const win = window.open("https://paypal.me/skyhoffert");
+            win.focus();
         } else if (tok[0] === "submenu") {
             if (tok[1] === "open") {
                 console.log("opening submenu " + tok[2]);
@@ -447,6 +450,19 @@ class UI_Button {
             ui_graphics_1.drawPolygon(this._dd_poly);
             ui_graphics_1.endFill();
         }
+    }
+}
+
+class UI_ServerLine extends UI_Button {
+    constructor(y, ln, m, pl, pr, p) {
+        super(WIDTH/2, y, WIDTH*0.95, 30, 4, ln, 12, "lobby "+ln);
+        // TODO:
+        // y: y position
+        // ln: lobby name
+        // m: map
+        // pl: players (X/Y)
+        // pr: private? bool
+        // p: ping (starting)
     }
 }
 
@@ -832,9 +848,21 @@ class UI_LocalPlay extends UI_Menu {
             "open main-menu"));
         this._buttons.push(new UI_Button(
             WIDTH - this._horizontal_offset, this._vertical_offset, 
-            this._btn_width, this._btn_height, this._btn_rad, "Play", this._btn_fs,
-            "play fade"));
+            this._btn_width, this._btn_height, this._btn_rad, "Donate", this._btn_fs,
+            "donate"));
+            
+        this._about_str = "Online play is currently under development.\n\n\
+Please donate to support this effort!\n\n\
+We look forward to dodging bombs with you!";
+        this._about_text = new PIXI.Text(this._about_str,
+            {fontFamily:"monospace", fontSize:30, fill:color_scheme.text, align:"left",
+            wordWrap:true, wordWrapWidth:WIDTH*0.8, lineHeight:35});
+        this._about_text.position.set(WIDTH/2, 300);
+        this._about_text.anchor.set(0.5, 0);
+        ui.addChild(this._about_text);
+        this._texts.push(this._about_text);
 
+        /*
         // Map dropdown menu.
         this._map_text = new PIXI.Text("Map:",
             {fontFamily:"monospace", fontSize:40, fill:color_scheme.title, align:"right"});
@@ -915,9 +943,6 @@ class UI_LocalPlay extends UI_Menu {
             "bomb-factor high; radio 1 2"));
         this._buttons[play_opts.bomb_factor + 9].Enable();
         
-        this._selected_button = 0;
-        this._buttons[this._selected_button].Select();
-
         this._button_transitions = {
             0: {E:1, S:2},
             1: {W:0, S:2},
@@ -932,6 +957,15 @@ class UI_LocalPlay extends UI_Menu {
             10: {N:7, W:9, E:11},
             11: {N:8, W:10},
         };
+        */
+
+        this._button_transitions = {
+            0: {E:1},
+            1: {W:0},
+        };
+        
+        this._selected_button = 0;
+        this._buttons[this._selected_button].Select();
     }
 }
 
@@ -953,9 +987,8 @@ class UI_OnlinePlay extends UI_Menu {
             "open main-menu"));
         this._buttons.push(new UI_Button(
             WIDTH - this._horizontal_offset, this._vertical_offset, 
-            this._btn_width, this._btn_height, this._btn_rad, "Donate", this._btn_fs,
-            "play fade"));
-            // DEBUG: ^ this should be "donate"
+            this._btn_width, this._btn_height, this._btn_rad, "Create Server", this._btn_fs,
+            "open create-server"));
         
         this._selected_button = 0;
         this._buttons[this._selected_button].Select();
@@ -964,7 +997,38 @@ class UI_OnlinePlay extends UI_Menu {
             0: {E:1},
             1: {W:0}
         };
+    }
+}
 
+class UI_CreateServer extends UI_Menu {
+    constructor() {
+        super("Create Server");
+
+        this._btn_width = 300;
+        this._btn_height = 120;
+        this._btn_rad = 20;
+        this._btn_fs = 30;
+        this._padding = 40;
+        this._horizontal_offset = this._btn_width/2 + this._padding;
+        this._vertical_offset = 120;
+
+        this._buttons.push(new UI_Button(
+            this._horizontal_offset, this._vertical_offset, 
+            this._btn_width, this._btn_height, this._btn_rad, "Back", this._btn_fs,
+            "open online-play"));
+        this._buttons.push(new UI_Button(
+            WIDTH - this._horizontal_offset, this._vertical_offset, 
+            this._btn_width, this._btn_height, this._btn_rad, "Donate", this._btn_fs,
+            "donate"));
+        
+        this._selected_button = 0;
+        this._buttons[this._selected_button].Select();
+
+        this._button_transitions = {
+            0: {E:1},
+            1: {W:0}
+        };
+        
         this._about_str = "Online play is currently under development.\n\n\
 Please donate to support this effort!\n\n\
 We look forward to dodging bombs with you!";
