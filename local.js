@@ -403,6 +403,10 @@ class LocalPlay {
         this._gfx.push(new Draw_Pebbles(x, y, r*5));
     }
 
+    AddPebbles(x, y, m) {
+        this._gfx.push(new Draw_Pebbles(x, y, m));
+    }
+
     Destroy() {
         this._ui.Destroy();
         this.Stop();
@@ -612,6 +616,9 @@ class Draw_UserBall {
         this._texture_num = tn;
         this._tint = null;
         this._sprite = null;
+
+        this._last_speed = 0;
+        this._min_speed_for_pebbles = 1.5;
     }
     
     ApplyTexture() {
@@ -641,6 +648,15 @@ class Draw_UserBall {
         Body.setVelocity(this._body, {x:vx, y:vy});
         Body.setAngularVelocity(this._body, va);
         Body.setAngle(this._body, a);
+
+        const new_speed = Math.abs(Math.hypot(vx, vy));
+        const diff_speed = Math.abs(new_speed - this._last_speed);
+
+        if (loading_stage === null && diff_speed > this._min_speed_for_pebbles) {
+            ui_menu.AddPebbles(this.x, this.y + this.radius, diff_speed);
+        }
+
+        this._last_speed = new_speed;
 
         if (this._sprite !== null) {
             this._sprite.angle = a * RAD_TO_DEG;
