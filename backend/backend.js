@@ -387,7 +387,7 @@ class Engine_8Bomb {
 
     Start() {
         console.log("ADMIN: starting engine.");
-		this.bomb_spawning = true;
+		//this.bomb_spawning = true;
 
 		// Send start signal to all clients.
 		network.ServerSend(JSON.stringify({
@@ -401,7 +401,7 @@ class Engine_8Bomb {
 
     Stop() {
         console.log("ADMIN: stopping engine.");
-		this.bomb_spawning = true;
+		//this.bomb_spawning = true;
     }
     
     RemoveClient(cid) {
@@ -535,7 +535,8 @@ class Engine_8Bomb {
 						console.log("TODO: reset the lobby");
 					} else if (rxp.spec.key === "/" && rxp.spec.down === true) {
 						console.log("DEBUG: got '/' special code");
-						this.Start();
+                        this.Start();
+                        this.bomb_spawning = !this.bomb_spawning;
 					}
 					this._objs[this._clients[rxp.spec.cID].id].Key(rxp.spec.key, rxp.spec.down);
 				} else {
@@ -893,7 +894,8 @@ class Bomb {
         this.vx = 0;
         this.vy = 0;
 		this.va = 0;
-		this.color = 0;
+        this.color = 0;
+        this.angle = 0;
 
         this.active = true;
 
@@ -947,6 +949,7 @@ class Bomb {
         this.vx = E8B.Sigs(this._body.velocity.x);
         this.vy = E8B.Sigs(this._body.velocity.y);
         this.va = E8B.Sigs(this._body.angularVelocity);
+        this.angle = E8B.Sigs(this._body.angle);
     }
 
     Destroy() {

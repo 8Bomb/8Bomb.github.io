@@ -1,8 +1,6 @@
 // Sky Hoffert
 // js for local play of 8Bomb.io.
 
-const { NewBomb } = require("./backend/engine");
-
 class Load_LocalPlay {
     constructor() {
         this._arcval = 0;
@@ -294,7 +292,6 @@ class LocalPlay {
                                     } else if (o.t === "b") {
                                         this._objs[o.i] = new Draw_Bomb(o.s.x, o.s.y, o.s.r, o.s.c);
                                     } else if (o.t === "u") {
-                                        console.log("DEBUG: tn " + o.s.tn);
                                         this._objs[o.i] = new Draw_UserBall(o.s.x, o.s.y, o.s.r, o.s.c, o.s.tn);
                                     } else if (o.t === "bs") {
                                         this._objs[o.i] = new Draw_BombSpawner();
@@ -402,7 +399,8 @@ class LocalPlay {
     }
 
     AddExplosion(x, y, r) {
-        this._gfx.push(new Draw_BombExplosion(x, y, r));
+        this._gfx.push(new Draw_BombExplosion(x, y, r*5));
+        this._gfx.push(new Draw_Pebbles(x, y, r*5));
     }
 
     Destroy() {
@@ -527,7 +525,9 @@ class Draw_Wall {
         this.right = x + w/2;
         this.type = "w";
 
-        this._body = Bodies.rectangle(this.x, this.y, this.width, this.height, {isStatic:true})
+        this._body = Bodies.rectangle(this.x, this.y, this.width, this.height, {isStatic:true});
+        this._body.collisionFilter.category = 2;
+        this._body.collisionFilter.mask = 3;
 
         World.add(engine_local.world, [this._body]);
     }
@@ -566,6 +566,8 @@ class Draw_GroundElement {
         this.type = "g";
         
         this._body = Bodies.rectangle(this.x, this.y, this.width, this.height, {isStatic:true});
+        this._body.collisionFilter.category = 2;
+        this._body.collisionFilter.mask = 7;
 
         World.add(engine_local.world, [this._body]);
     }
@@ -602,6 +604,8 @@ class Draw_UserBall {
         this._body = Bodies.circle(this.x, this.y, this.radius, 12);
         this._body.restitution = 0.5;
         this._body.slop = 0.02;
+        this._body.collisionFilter.category = 1;
+        this._body.collisionFilter.mask = 3;
         World.add(engine_local.world, [this._body]);
 
         this._texture = null;
@@ -667,12 +671,15 @@ class Draw_Bomb {
         this.active = true;
 
         this._body = NewBomb(this.x, this.y, this.radius);
+        this._body.collisionFilter.category = 1;
+        this._body.collisionFilter.mask = 3;
         World.add(engine_local.world, [this._body]);
     }
 
     ApplyTexture() {}
 
     Destroy() {
+        this.active = false;
         World.remove(engine_local.world, [this._body]);
     }
     
@@ -700,11 +707,106 @@ class Draw_Bomb {
     }
 }
 
+class Draw_Pebble {
+    constructor(x, y, vx, vy, l) {
+        this.x = x;
+        this.y = y;
+        this._life = l;
+        this.color = DarkenColor(MAP_COLORS[play_opts.map].ground);
+        
+        this._body = Bodies.rectangle(this.x, this.y, 3, 3);
+        this._body.collisionFilter.category = 4;
+        this._body.collisionFilter.mask = 6;
+        Body.setVelocity(this._body, {x:vx, y:vy});
+        World.add(engine_local.world, this._body);
+
+        this.active = true;
+    }
+
+    Destroy() {
+        World.remove(engine_local.world, this._body);
+    }
+
+    Tick(dT) {
+        if (this.active === false) { return; }
+
+        this.x = this._body.position.x;
+        this.y = this._body.position.y;
+
+        this._life -= dT;
+        if (this._life < 0) {
+            this.active = false;
+        }
+    }
+
+    Draw() {
+        if (this.active === false) { return; }
+
+        stage_graphics.lineStyle(0);
+        stage_graphics.beginFill(this.color);
+        stage_graphics.drawRect(this.x-1, this.y-1, 3, 3);
+        stage_graphics.endFill();
+    }
+}
+
+class Draw_Pebbles {
+    constructor(x, y, m) {
+        this.x = x;
+        this.y = y;
+        this._magnitude = m;
+
+        this._pebbles = [];
+        for (let i = 0; i < this._magnitude; i++) {
+            const vx = (Math.random() - 0.5) * this._magnitude;
+            const vy = -(Math.random() - 0.1) * this._magnitude;
+            const life = Math.random() * 3000 + 2000;
+            this._pebbles.push(new Draw_Pebble(this.x, this.y, vx, vy, life));
+        }
+
+        this.active = true;
+    }
+
+    ApplyTexture() {}
+
+    Tick(dT) {
+        if (this.active === false) { return; }
+
+        let has_active = false;
+        for (let i = 0; i < this._pebbles.length; i++) {
+            this._pebbles[i].Tick(dT);
+            if (this._pebbles[i].active === false) {
+                this._pebbles[i].Destroy();
+                this._pebbles.splice(i, 1);
+                i--;
+            } else {
+                has_active = true;
+            }
+        }
+
+        this.active = has_active;
+    }
+
+    Destroy() {
+        while (this._pebbles.length > 0) {
+            this._pebbles[i].Destroy();
+            this._pebbles.splice(0, 1);
+        }
+        this.active = false;
+    }
+
+    Draw() {
+        if (this.active === false) { return; }
+        for (let i = 0; i < this._pebbles.length; i++) {
+            this._pebbles[i].Draw();
+        }
+    }
+}
+
 class Draw_BombExplosion {
     constructor(x, y, r, c=MAP_COLORS[play_opts.map].magma) {
         this.x = x;
         this.y = y;
-        this.radius = r*4;
+        this.radius = r;
         this._alpha = 1;
         this._color = c;
         this.type = "e";
@@ -739,9 +841,7 @@ class Draw_BombExplosion {
     }
 
     Tick(dT) {
-        if (this._sprite.playing === false) {
-            this.active = false;
-        }
+        this.active = this._sprite.playing;
     }
 
     Draw() {}
