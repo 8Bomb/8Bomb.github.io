@@ -320,6 +320,7 @@ class UI_Button {
 
         this._selected = false; // Selected highlights
         this._enabled = false; // Enabled is for "radio buttons"
+        this._filled = true;
 
         this._action = a;
 
@@ -410,10 +411,12 @@ class UI_Button {
         if (!this._active) { return; }
 
         ui_graphics_1.lineStyle(0);
-        ui_graphics_1.beginFill(color_scheme.fill/2);
-        ui_graphics_1.drawRoundedRect(this._x - this._width/2 + 10, this._y - this._height/2 + 10,
-            this._width, this._height, this._corner_radius);
-        ui_graphics_1.endFill();
+        if (this._filled) {
+            ui_graphics_1.beginFill(color_scheme.fill/2);
+            ui_graphics_1.drawRoundedRect(this._x - this._width/2 + 10, this._y - this._height/2 + 10,
+                this._width, this._height, this._corner_radius);
+            ui_graphics_1.endFill();
+        }
 
         let has_outline = false;
         if (this._enabled) {
@@ -440,10 +443,12 @@ class UI_Button {
             }
         }
 
-        ui_graphics_1.beginFill(color_scheme.fill);
-        ui_graphics_1.drawRoundedRect(this._x - this._width/2, this._y - this._height/2, 
-            this._width, this._height, this._corner_radius);
-        ui_graphics_1.endFill();
+        if (this._filled) {
+            ui_graphics_1.beginFill(color_scheme.fill);
+            ui_graphics_1.drawRoundedRect(this._x - this._width/2, this._y - this._height/2, 
+                this._width, this._height, this._corner_radius);
+            ui_graphics_1.endFill();
+        }
 
         if (this._has_dropdown) {
             ui_graphics_1.lineStyle(0);
@@ -455,8 +460,8 @@ class UI_Button {
 }
 
 class UI_ServerLine extends UI_Button {
-    constructor(y, ln, m, pl, pr, p) {
-        super(WIDTH/2, y, WIDTH*0.95, 30, 4, ln, 12, "lobby "+ln);
+    constructor(y, w, ln, m, pl, pr, p) {
+        super(WIDTH/2, y, w, 60, 0, ln, 14, "lobby "+ln);
         // TODO:
         // y: y position
         // ln: lobby name
@@ -464,6 +469,48 @@ class UI_ServerLine extends UI_Button {
         // pl: players (X/Y)
         // pr: private? bool
         // p: ping (starting)
+
+        this._filled = false;
+
+        this._text.anchor.set(0, 0.5);
+
+        this._map_text = new PIXI.Text(m,
+            {fontFamily:"monospace", fontSize:this._font_size, fill:color_scheme.text, align:"left"});
+        this._map_text.anchor.set(0, 0.5);
+        ui.addChild(this._map_text);
+
+        this._players_str = "" + pl.current + "/" + pl.max;
+        this._players_text = new PIXI.Text(this._players_str,
+            {fontFamily:"monospace", fontSize:this._font_size, fill:color_scheme.text, align:"left"});
+        this._players_text.anchor.set(0, 0.5);
+        ui.addChild(this._players_text);
+        
+        this._private_str = pr ? "Yes" : "No";
+        this._private_text = new PIXI.Text(this._private_str,
+            {fontFamily:"monospace", fontSize:this._font_size, fill:color_scheme.text, align:"left"});
+        this._private_text.anchor.set(0, 0.5);
+        ui.addChild(this._private_text);
+
+        this._ping_text = new PIXI.Text(""+p+" ms",
+            {fontFamily:"monospace", fontSize:this._font_size, fill:color_scheme.text, align:"left"});
+        this._ping_text.anchor.set(0, 0.5);
+        ui.addChild(this._ping_text);
+    }
+
+    Destroy() {
+        super.Destroy();
+        ui.removeChild(this._map_text);
+        ui.removeChild(this._players_text);
+        ui.removeChild(this._private_text);
+        ui.removeChild(this._ping_text);
+    }
+
+    UpdateTextLefts(l) {
+        this._text.position.set(l.lobby, this._y);
+        this._map_text.position.set(l.map, this._y);
+        this._players_text.position.set(l.players, this._y);
+        this._private_text.position.set(l.private, this._y);
+        this._ping_text.position.set(l.ping, this._y);
     }
 }
 
@@ -981,6 +1028,13 @@ class UI_OnlinePlay extends UI_Menu {
         this._padding = 40;
         this._horizontal_offset = this._btn_width/2 + this._padding;
         this._vertical_offset = 120;
+        
+        // List vars, some used for drawing.
+        this._list_left_bound = WIDTH * 0.05;
+        this._list_width = WIDTH * 0.9;
+        this._list_height = HEIGHT - 300;
+        this._list_right_bound = this._list_left_bound + this._list_width;
+        this._list_label_fs = 20;
 
         this._buttons.push(new UI_Button(
             this._horizontal_offset, this._vertical_offset, 
@@ -995,8 +1049,9 @@ class UI_OnlinePlay extends UI_Menu {
         this._buttons[this._selected_button].Select();
 
         this._button_transitions = {
-            0: {E:1},
-            1: {W:0}
+            0: {E:1, S:2},
+            1: {W:0, S:2},
+            2: {N:0},
         };
 
         this._ping_timer = PING_RATE;
@@ -1009,17 +1064,11 @@ class UI_OnlinePlay extends UI_Menu {
         this._ping_text.anchor.set(1, 0.5);
         ui.addChild(this._ping_text);
         this._texts.push(this._ping_text);
-
-        // List vars, some used for drawing.
-        this._list_left_bound = WIDTH * 0.05;
-        this._list_width = WIDTH * 0.9;
-        this._list_height = HEIGHT - 300;
-        this._list_right_bound = this._list_left_bound + this._list_width;
-        this._list_label_fs = 20;
         
+        this._list_lobby_text_left = this._list_left_bound + 20;
         this._lobby_name_text = new PIXI.Text("Lobby Name",
             {fontFamily:"monospace", fontSize:this._list_label_fs, fill:color_scheme.text, align:"left"});
-        this._lobby_name_text.position.set(this._list_left_bound + 20, 230);
+        this._lobby_name_text.position.set(this._list_lobby_text_left, 230);
         this._lobby_name_text.anchor.set(0, 0.5);
         ui.addChild(this._lobby_name_text);
         this._texts.push(this._lobby_name_text);
@@ -1064,6 +1113,11 @@ class UI_OnlinePlay extends UI_Menu {
         this._checked = false;
 
         this._net_failed = false;
+        
+        // TODO: move this to when we receive lobby info.
+        const esl = new UI_ServerLine(400, this._list_width, "Example Lobby", "Kansas", {current:0, max:10}, false, -1);
+        esl.UpdateTextLefts(this._TextLeftPositions());
+        this._buttons.push(esl);
     }
 
     _UpdatePing(p) {
@@ -1124,6 +1178,16 @@ class UI_OnlinePlay extends UI_Menu {
                 }
             }
         }
+    }
+
+    _TextLeftPositions() {
+        return {
+            lobby: this._list_lobby_text_left,
+            map: this._list_map_text_left,
+            players: this._list_players_text_left,
+            private: this._list_private_text_left,
+            ping: this._list_ping_text_left,
+        };
     }
 
     Tick(dT) {

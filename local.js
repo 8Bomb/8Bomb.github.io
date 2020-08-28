@@ -343,55 +343,9 @@ class LocalPlay {
         }
     }
 
-    Start() {
-        /* DEBUG - starting from scratch
-        network.ClientSend(JSON.stringify({
-            type: "admin",
-            reqID: GenRequestID(6),
-            spec: {
-                action: "destroy",
-            },
-        }));
-        network.ClientSend(JSON.stringify({
-            type: "admin",
-            reqID: GenRequestID(6),
-            spec: {
-                action: "create",
-            },
-        }));
-        network.ClientSend(JSON.stringify({
-            type: "connect",
-            reqID: GenRequestID(6),
-            spec: {},
-        }));
-        network.ClientSend(JSON.stringify({
-            type: "admin",
-            reqID: GenRequestID(6),
-            spec: {
-                action: "start",
-            },
-        }));
-        */
-    }
+    Start() {}
 
-    Stop() {
-        /*
-        network.ClientSend(JSON.stringify({
-            type: "admin",
-            reqID: GenRequestID(6),
-            spec: {
-                action: "stop",
-            },
-        }));
-        network.ClientSend(JSON.stringify({
-            type: "admin",
-            reqID: GenRequestID(6),
-            spec: {
-                action: "destroy",
-            },
-        }));
-        */
-    }
+    Stop() {}
 
     Resume() {
         this._ui.Toggle();
