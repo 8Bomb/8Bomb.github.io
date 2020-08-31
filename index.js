@@ -12,6 +12,8 @@ const fmath = new FMath();
 const WIDTH = window.innerWidth;
 const HEIGHT = window.innerHeight;
 
+const canvas = document.getElementById("canvas");
+
 const COLORS = {
     GRAND_CANYON: {
         name: "Grand Canyon",
@@ -61,6 +63,7 @@ const app = new PIXI.Application({
     backgroundColor: color_scheme.bg,
     resolution: window.devicePixelRatio || 1,
     antialias: true,
+    canvas: canvas,
 });
 
 document.body.appendChild(app.view);
