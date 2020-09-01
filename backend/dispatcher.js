@@ -6,6 +6,7 @@ const fs = require("fs");
 const http = require("http");
 const https = require("https");
 const SocketServer = require("ws").Server;
+const { spawn } = require("child_process");
 
 const E8B = require("./engine");
 const NET = require("./network");
@@ -56,7 +57,7 @@ console.log("listening.");
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-// Engine! ////////////////////////////////////////////////////////////////////////////////////////
+// Dispatcher /////////////////////////////////////////////////////////////////////////////////////
 
 let prevTime = Date.now();
 let tick_timer = 0;
@@ -86,8 +87,67 @@ class Dispatcher {
     constructor() {
         this.active = true;
         this._actionQ = [];
-        this._net_set = false;
-    }
+		this._net_set = false;
+		this._servers = {};
+
+		this._AddServer("Test Server", 5061);
+		this._AddServer("Other Test Server", 5062);
+	}
+
+	Destroy() {
+		for (let k in this._servers) {
+			this._DestroyServer(k);
+		}
+	}
+	
+	_AddServer(n, p, m="Kansas", pl={current:0,max:8}, pr=false) {
+		if (n in this._servers) {
+			console.log("ERR. Already a server with name " + n);
+			return;
+		}
+
+		this._servers[n] = {
+			port: p,
+			map: m,
+			players: pl,
+			private: pr,
+			process: spawn("node", ["backend.js", p]),
+		};
+		this._servers[n].process.stdout.on("data", function (data) {
+			process.stdout.write("P("+p+"): " + data);
+		});
+		this._servers[n].process.stderr.on("data", function (data) {
+			process.stdout.write("E("+p+"): " + data);
+		});
+	}
+
+	_DestroyServer(n) {
+		if (!(n in this._servers)) {
+			console.log("ERR. No subprocess with name " + n);
+			return;
+		}
+
+		this._servers[n].process.kill();
+
+		let tstart = Date.now();
+		let failed = false;
+		while (this._servers[n].process.killed === false) {
+			const now = Date.now();
+
+			// wait 500 ms before failing.
+			if (now - tstart > 2000) {
+				failed = true;
+				break;
+			}
+		}
+
+		if (failed) {
+			console.log("ERR. Failed to kill subprocess on port " + this._servers[n].port);
+		} else {
+			console.log("Killed server on port " + this._servers[n].port);
+			delete this._servers[n];
+		}
+	}
 
     ActionQueue() { return this._actionQ; }
     NetSet() { return this._net_set = true; }
@@ -146,7 +206,26 @@ class Dispatcher {
 							}
 						}), rxp.spec.cID);
 					}
-				} 
+				} else if (rxp.type === "servers") {
+					let srm = {
+						type: "servers-response",
+						resID: E8B.GenRequestID(6),
+						spec: {
+							reqID: rxp.reqID,
+							servers: [],
+						}
+					};
+					for (let k in this._servers) {
+						srm.spec.servers.push({
+							name: k,
+							port: this._servers[k].port,
+							map: this._servers[k].map,
+							players: this._servers[k].players,
+							private: this._servers[k].private,
+						});
+					}
+					network.ServerSend(JSON.stringify(srm));
+				}
             }
         }
     }
@@ -160,8 +239,9 @@ setTimeout(Tick, FPS);
 
 // Disconnect from clients before closing.
 function Destroy() {
-    console.log("Sending disconnect to all clients.");
-    network.Destroy();
+	console.log("Sending disconnect to all clients.");
+	dispatcher.Destroy();
+	network.Destroy();
 }
 
 process.on("SIGINT", function() {

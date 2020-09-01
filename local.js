@@ -208,6 +208,8 @@ class LocalPlay {
     }
 
     _HandleNetwork() {
+        if (network === null) { return; }
+
         while (network.HasData()) {
             const rx = network.ClientRecv();
             if (rx !== "") {

@@ -177,7 +177,9 @@ let loading_stage = null;
 
 // TODO: add for local play
 //let network = new LocalNetworkEmulator();
-let network_addr = "wss://skyhoffert-backend.com:5060";
+let network_addr_base = "wss://skyhoffert-backend.com:";
+let network_dispatcher = network_addr_base + "5060";
+let network_addr = network_dispatcher;
 
 // If there is a file in the backend folder named LOCAL - use a local server.
 // For development purposes.
@@ -186,7 +188,9 @@ xhr.open("HEAD", "backend/LOCAL");
 xhr.send();
 xhr.onreadystatechange = function() {
     if (this.status === 200) {
-        network_addr = "ws://localhost:5060";
+        network_addr_base = "ws://localhost:";
+        network_dispatcher = network_addr_base + "5060";
+        network_addr = network_dispatcher;
     }
 };
 
@@ -211,6 +215,12 @@ function CommenceStageAction(a) {
             ui_menu.Destroy();
 
             if (tok[1] === "main-menu") {
+                if (network !== null) {
+                    network.Destroy();
+                    network = null;
+                    network_addr = network_dispatcher;
+                }
+
                 ui_menu = new UI_MainMenu();
             } else if (tok[1] === "settings") {
                 ui_menu = new UI_Settings();
@@ -291,6 +301,9 @@ function CommenceStageAction(a) {
         } else if (tok[0] === "resume") {
             console.log("Resuming play.");
             ui_menu.Resume();
+        } else if (tok[0] === "lobby") {
+            network_addr = network_addr_base + tok[1];
+            console.log("Going to game server at  " + network_addr);
         }
     }
 }
@@ -463,15 +476,8 @@ class UI_Button {
 }
 
 class UI_ServerLine extends UI_Button {
-    constructor(y, w, ln, m, pl, pr, p) {
-        super(WIDTH/2, y, w, 60, 0, ln, 14, "lobby "+ln);
-        // TODO:
-        // y: y position
-        // ln: lobby name
-        // m: map
-        // pl: players (X/Y)
-        // pr: private? bool
-        // p: ping (starting)
+    constructor(y, w, ln, m, pl, pr, p, port) {
+        super(WIDTH/2, y, w, 60, 0, ln, 14, "lobby "+port+";play fade");
 
         this._filled = false;
 
@@ -498,6 +504,14 @@ class UI_ServerLine extends UI_Button {
             {fontFamily:"monospace", fontSize:this._font_size, fill:color_scheme.text, align:"left"});
         this._ping_text.anchor.set(0, 0.5);
         ui.addChild(this._ping_text);
+    }
+    
+    SetTextAlpha(a) {
+        super.SetTextAlpha(a);
+        this._map_text.alpha = a;
+        this._players_text.alpha = a;
+        this._private_text.alpha = a;
+        this._ping_text.alpha = a;
     }
 
     Destroy() {
@@ -1052,9 +1066,8 @@ class UI_OnlinePlay extends UI_Menu {
         this._buttons[this._selected_button].Select();
 
         this._button_transitions = {
-            0: {E:1, S:2},
-            1: {W:0, S:2},
-            2: {N:0},
+            0: {E:1},
+            1: {W:0},
         };
 
         this._ping_timer = PING_RATE;
@@ -1118,9 +1131,9 @@ class UI_OnlinePlay extends UI_Menu {
         this._net_failed = false;
         
         // TODO: move this to when we receive lobby info.
-        const esl = new UI_ServerLine(400, this._list_width, "Example Lobby", "Kansas", {current:0, max:10}, false, -1);
-        esl.UpdateTextLefts(this._TextLeftPositions());
-        this._buttons.push(esl);
+        // const esl = new UI_ServerLine(400, this._list_width, "Example Lobby", "Kansas", {current:0, max:10}, false, -1);
+        // esl.UpdateTextLefts(this._TextLeftPositions());
+        // this._buttons.push(esl);
     }
 
     _UpdatePing(p) {
@@ -1140,6 +1153,8 @@ class UI_OnlinePlay extends UI_Menu {
     }
 
     _HandleNetwork() {
+        if (network === null) { return; }
+
         while (network.HasData()) {
             const rx = network.ClientRecv();
             if (rx !== "") {
@@ -1171,13 +1186,27 @@ class UI_OnlinePlay extends UI_Menu {
                             cID: this._clientID,
                         },
                     }));
-                } 
-            } else if (rxp.type === "check-response") {
-                if (rxp.spec.good === true) {
-                    this._checked = true;
-                    console.log("got good server check.");
-                } else {
-                    console.log("Failed server check!!");
+                } else if (rxp.type === "check-response") {
+                    if (rxp.spec.good === true) {
+                        this._checked = true;
+                        console.log("Got good server check.");
+    
+                        // Get a list of active servers.
+                        network.ClientSend(JSON.stringify({
+                            type: "servers",
+                            reqID: GenRequestID(6),
+                            spec: {},
+                        }));
+                    } else {
+                        console.log("Failed server check!!");
+                    }
+                } else if (rxp.type === "servers-response") {
+                    for (let i = 0; i < rxp.spec.servers.length; i++) {
+                        const serv = rxp.spec.servers[i];
+                        const esl = new UI_ServerLine(300+i*60, this._list_width, serv.name, serv.map, serv.players, serv.private, -1, serv.port);
+                        esl.UpdateTextLefts(this._TextLeftPositions());
+                        this._buttons.push(esl);
+                    }
                 }
             }
         }
@@ -1197,6 +1226,8 @@ class UI_OnlinePlay extends UI_Menu {
         super.Tick(dT);
 
         if (this._net_failed) { return; }
+
+        if (network === null) { return; }
 
         this._HandleNetwork();
 
@@ -1220,9 +1251,6 @@ class UI_OnlinePlay extends UI_Menu {
 
     Destroy() {
         super.Destroy();
-
-        network.Destroy();
-        network = null;
     }
 
     Draw() {
@@ -1338,6 +1366,7 @@ document.addEventListener("mouseup", function (evt) {
 
 document.addEventListener("beforeunload", function (evt) {
     if (network !== null) {
+        console.log("here");
         network.Destroy();
     }
 }, false);
