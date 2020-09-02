@@ -1,4 +1,5 @@
 // Sky Hoffert
+// Dispatcher program for 8Bomb.io.
 
 console.log("Starting 8Bomb dispatcher.");
 
@@ -134,7 +135,7 @@ class Dispatcher {
 		while (this._servers[n].process.killed === false) {
 			const now = Date.now();
 
-			// wait 500 ms before failing.
+			// wait 2 s before failing.
 			if (now - tstart > 2000) {
 				failed = true;
 				break;

@@ -172,6 +172,20 @@ class Engine_8Bomb {
         //this._objs[this._NewID(this._keylen)] = new Wall(ENGINE_WIDTH/2 - 20, -ENGINE_HEIGHT/2, 40, ENGINE_HEIGHT);
     }
 
+    _ResetWorld() {
+        this._bomb_spawning = false;
+        
+        for (let k in this._objs) {
+            if (this._objs[k].type === "u") {
+                this._objs[k].MoveTo(0, -ENGINE_HEIGHT/2, true);
+                continue;
+            }
+
+            this._objs[k].Destroy();
+            delete this._objs[k];
+        }
+    }
+
     _NewID(n) {
         let id = E8B.GenRequestID(n);
         while (id in this._objs) {
@@ -211,33 +225,45 @@ class Engine_8Bomb {
     }
 
     _InitClient(id, cid) {
-		if (cid !== "" ) {
+        let msg_8B = {
+            a: "aur",
+            s: [],
+        };
+        for (let k in this._objs) {
+            const res = this._AddObjToSpec(k);
+            if (res !== null) {
+                msg_8B.s.push(res);
+            }
+        }
+
+		if (cid !== "") {
+            // Send to a specific client.
 			network.ServerSend(JSON.stringify({
 				type: "8B",
 				resID: E8B.GenRequestID(6),
 				spec: {
 					a: "cw"
 				},
-			}), cid);
-
-			let msg_8B = {
-				a: "aur",
-				s: [],
-			};
-			for (let k in this._objs) {
-				const res = this._AddObjToSpec(k);
-				if (res !== null) {
-					msg_8B.s.push(res);
-				}
-			}
-
+            }), cid);
+            network.ServerSend(JSON.stringify({
+                type: "8B",
+                resID: E8B.GenRequestID(6),
+                spec: msg_8B,
+            }), cid);
+		} else {
+            // Send to ALL clients.
 			network.ServerSend(JSON.stringify({
 				type: "8B",
 				resID: E8B.GenRequestID(6),
-				spec: msg_8B,
-			}), cid);
-		} else {
-			console.log("TODO: send init to all clients.");
+				spec: {
+					a: "cw"
+				},
+            }));
+            network.ServerSend(JSON.stringify({
+                type: "8B",
+                resID: E8B.GenRequestID(6),
+                spec: msg_8B,
+            }));
 		}
     }
 
@@ -430,9 +456,11 @@ class Engine_8Bomb {
 						console.log("Couldn't handle admin action " + rxp.spec.action);
 					}
 				} else if (rxp.type === "input") {
-					if (rxp.spec.key === "F2" && rxp.spec.down === true) {
-						console.log("DEBUG: got f2 special code");
-						console.log("TODO: reset the lobby");
+					if (rxp.spec.key === "1" && rxp.spec.down === true) {
+                        console.log("DEBUG: got 1 special code");
+                        this._ResetWorld();
+                        this._CreateWorld();
+                        this._InitClient();
 					} else if (rxp.spec.key === "/" && rxp.spec.down === true) {
 						console.log("DEBUG: got '/' special code");
                         this.Start();
@@ -702,6 +730,15 @@ class UserBall {
     }
 
     Position() { return {x:this.x, y:this.y} };
+
+    MoveTo(x, y, full_reset=false) {
+        Body.setPosition(this._body, {x:x, y:y});
+        if (full_reset) {
+            Body.setVelocity(this._body, {x:0, y:0});
+            Body.setAngle(this._body, 0);
+            Body.setAngularVelocity(this._body, 0);
+        }
+    }
 
     Bomb(x, y, r) {
         if (!this.active) { return; }

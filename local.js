@@ -200,7 +200,13 @@ class LocalPlay {
     }
 
     _ClearWorld() {
-        console.log("Manually cleared world. TODO is this necessary?");
+        console.log("Server told us to clear world.");
+        
+        while (this._gfx.length > 0) {
+            this._gfx[0].Destroy();
+            this._gfx.splice(0, 1);
+        }
+
         for (let k in this._objs) {
             this._objs[k].Destroy();
             delete this._objs[k];
@@ -759,7 +765,7 @@ class Draw_Pebbles {
 
     Destroy() {
         while (this._pebbles.length > 0) {
-            this._pebbles[i].Destroy();
+            this._pebbles[0].Destroy();
             this._pebbles.splice(0, 1);
         }
         this.active = false;
