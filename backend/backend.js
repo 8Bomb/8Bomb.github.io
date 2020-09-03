@@ -49,6 +49,7 @@ if (!LOCAL) {
 }
  
 var express = require("express");
+const { timeStamp } = require("console");
 var app = express();
  
 //pass in your express app and credentials to create an https server
@@ -101,7 +102,7 @@ const ENGINE_WIDTH = 1200;
 const ENGINE_HEIGHT = Math.round(ENGINE_WIDTH*9/16);
 
 const FPS = 1000/60;
-const FPS_LOG_RATE = 5000; // ms
+const FPS_LOG_RATE = 10000; // ms
 
 const GROUND_COLLISION_RATE = 1000; // ms
 
@@ -121,6 +122,8 @@ class Engine_8Bomb {
         this._ground_dist_to_bot = ENGINE_HEIGHT/2 - this._ground_height;
 
         this._clients = {};
+
+        this._leader = null;
 
         this._tasks = [];
 
@@ -146,6 +149,8 @@ class Engine_8Bomb {
         this._bomb_spawner = -1;
 
         this._actionQ = [];
+
+        this._num_players = 0;
 
         this._CreateWorld();
     }
@@ -313,6 +318,23 @@ class Engine_8Bomb {
         this._rmQ.push(this._clients[cid].id);
         delete this._clients[cid];
         console.log("Removing client " + cid + " from world.");
+        
+        this._num_players--;
+
+        if (this._leader === cid) {
+            this._leader = null;
+
+            const acs = Object.keys(this._clients);
+            if (acs.length > 0) {
+                this._leader = acs[0];
+                console.log("Selected new leader " + this._leader);
+                network.ServerSend(JSON.stringify({
+                    type: "become-leader",
+                    resID: E8B.GenRequestID(6),
+                    spec: {},
+                }), this._leader);
+            }
+        }
     }
 
     Start() {
@@ -425,7 +447,8 @@ class Engine_8Bomb {
 					this._objs[id] = new UserBall(0, -ENGINE_HEIGHT/2, cc, ctn);
 					this._clients[cid] = {
                         id: id,
-					};
+                    };
+                    this._num_players++;
 
 					network.ServerSend(JSON.stringify({
 						type: "connect-response",
@@ -436,9 +459,19 @@ class Engine_8Bomb {
                             color: cc,
                             texture_num: ctn,
 						}
-					}), cid);
+                    }), cid);
+                    
+                    if (this._leader === null) {
+                        this._leader = cid;
+                        console.log("Selected a leader " + this._leader);
+                        network.ServerSend(JSON.stringify({
+                            type: "become-leader",
+                            resID: E8B.GenRequestID(6),
+                            spec: {},
+                        }), cid);
+                    }
 
-					console.log("ENGINE adding new user ball");
+                    console.log("ENGINE adding new user ball");
 
 					this._InitClient(id, cid);
 				} else if (rxp.type === "admin") {
@@ -456,18 +489,32 @@ class Engine_8Bomb {
 						console.log("Couldn't handle admin action " + rxp.spec.action);
 					}
 				} else if (rxp.type === "input") {
-					if (rxp.spec.key === "1" && rxp.spec.down === true) {
-                        console.log("DEBUG: got 1 special code");
-                        this._ResetWorld();
-                        this._CreateWorld();
-                        this._InitClient();
-					} else if (rxp.spec.key === "/" && rxp.spec.down === true) {
-						console.log("DEBUG: got '/' special code");
-                        this.Start();
-                        this.bomb_spawning = !this.bomb_spawning;
-					}
+                    if (rxp.spec.cID === this._leader) {
+                        if (rxp.spec.key === "1" && rxp.spec.down === true) {
+                            console.log("DEBUG: got 1 special code from leader");
+                            this._ResetWorld();
+                            this._CreateWorld();
+                            this._InitClient();
+                        } else if (rxp.spec.key === "2" && rxp.spec.down === true) {
+                            console.log("DEBUG: got '2' special code from leader");
+                            this.Start();
+                            this.bomb_spawning = !this.bomb_spawning;
+                        }
+                    }
 					this._objs[this._clients[rxp.spec.cID].id].Key(rxp.spec.key, rxp.spec.down);
-				} else {
+				} else if (rxp.type === "players") {
+                    network.ServerSend(JSON.stringify({
+                        type: "players-response",
+                        resID: E8B.GenRequestID(6),
+                        spec: {
+                            reqID: rxp.reqID,
+                            players: {
+                                current: this._num_players,
+                                max: 8,
+                            }
+                        },
+                    }), rxp.spec.cID);
+                } else {
 					console.log("Server couldn't handle " + rxp.type);
 				}
 			}

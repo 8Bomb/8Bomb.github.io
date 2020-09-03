@@ -6,6 +6,7 @@ console.log("Starting 8Bomb dispatcher.");
 const fs = require("fs");
 const http = require("http");
 const https = require("https");
+const WebSocket = require("ws");
 const SocketServer = require("ws").Server;
 const { spawn } = require("child_process");
 
@@ -58,6 +59,22 @@ console.log("listening.");
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
+// Catch user input ///////////////////////////////////////////////////////////////////////////////
+
+process.stdin.once("data", function (data) {
+	const inp = data.toString().trim();
+
+	if (inp === "x") {
+		Destroy();
+		process.exit();
+	} else if (inp === "d") {
+		console.log("LOCAL ADMIN: debug action");
+		dispatcher.DebugAction();
+	}
+});
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
 // Dispatcher /////////////////////////////////////////////////////////////////////////////////////
 
 let prevTime = Date.now();
@@ -82,7 +99,8 @@ function Tick() {
 }
 
 const FPS = 1000/60;
-const FPS_LOG_RATE = 5000; // ms
+const FPS_LOG_RATE = 10000; // ms
+const SERVER_NET_RATE = 1000; // ms
 
 class Dispatcher {
     constructor() {
@@ -90,6 +108,8 @@ class Dispatcher {
         this._actionQ = [];
 		this._net_set = false;
 		this._servers = {};
+
+		this._server_net_timer = SERVER_NET_RATE;
 
 		this._AddServer("Test Server", 5061);
 		this._AddServer("Other Test Server", 5062);
@@ -108,6 +128,8 @@ class Dispatcher {
 		}
 
 		this._servers[n] = {
+			conn: new Dispatcher_Network("ws://localhost:" + p),
+			cID: null,
 			port: p,
 			map: m,
 			players: pl,
@@ -151,7 +173,12 @@ class Dispatcher {
 	}
 
     ActionQueue() { return this._actionQ; }
-    NetSet() { return this._net_set = true; }
+	NetSet() { return this._net_set = true; }
+	
+	DebugAction() {
+		console.log("Destroying Test Server.");
+		this._DestroyServer("Test Server");
+	}
 
     Tick(dT) {
         while (this._actionQ.length > 0) {
@@ -160,8 +187,51 @@ class Dispatcher {
             this._actionQ.splice(0, 1);
         }
         
-        this._HandleNetwork();
-    }
+		this._HandleNetwork();
+
+		this._server_net_timer -= dT;
+		if (this._server_net_timer < 0) {
+			this._server_net_timer = SERVER_NET_RATE;
+			this._HandleServerNetwork();
+		}
+	}
+	
+	_HandleServerNetwork() {
+		for (let k in this._servers) {
+			const c = this._servers[k].conn;
+
+			while (c.HasData()) {
+				const rx = c.ClientRecv();
+				if (rx !== "") {
+					let rxp = {};
+					try {
+						rxp = JSON.parse(rx);
+					} catch (err) {
+						console.log("ERR. Could not parse rx message in client.");
+						break;
+					}
+
+					if (rxp.type === "open-response") {
+						console.log("opened " + k);
+						this._servers[k].cID = rxp.spec.cID;
+					} else if (rxp.type === "players-response") {
+						this._servers[k].players = rxp.spec.players;
+					}
+				}
+			}
+			
+			// Send a request for current and max players.
+			if (this._servers[k].cID !== null) {
+				c.ClientSend(JSON.stringify({
+					type: "players",
+					reqID: E8B.GenRequestID(6),
+					spec: {
+						cID: this._servers[k].cID,
+					}
+				}));
+			}
+		}
+	}
 
     _HandleNetwork() {
         if (!this._net_set) { return; }
@@ -229,6 +299,78 @@ class Dispatcher {
 				}
             }
         }
+    }
+}
+
+class Dispatcher_Network {
+    constructor(addr) {
+        this._addr = addr;
+
+        this._rxQ = [];
+
+        this._open = false;
+        this.failed = false;
+
+        this._ws = new WebSocket(this._addr);
+        let self = this;
+        this._ws.onopen = function (evt) {
+            self._WSOpen(evt);
+        }
+        this._ws.onmessage = function (evt) {
+            self._WSRecv(evt);
+        }
+        this._ws.onclose = function (evt) {
+            self._WSClose(evt);
+        }
+        this._ws.onerror = function (evt) {
+            self._WSError(evt);
+        }
+    }
+
+    Destroy() {
+        this._open = false;
+        this._ws.close();
+        console.log("WS closed.");
+    }
+
+    _WSOpen(evt) {
+        console.log("WS opened.");
+        this._open = true;
+    }
+
+    _WSRecv(evt) {
+        this._rxQ.push(evt.data);
+    }
+
+    _WSClose(evt) {
+        this._open = false;
+        this._ws.close();
+        console.log("WS closed by server.");
+    }
+
+    _WSError(evt) {
+        this.failed = true;
+    }
+
+    HasData() {
+        return this._rxQ.length > 0;
+    }
+
+    ClientRecv() {
+        if (this._rxQ.length > 0) {
+            const r = this._rxQ[0];
+            this._rxQ.splice(0, 1);
+            return E8B.Decompress(r);
+        }
+        return "";
+    }
+
+    ClientSend(msg) {
+        if (!this._open) { return; }
+
+        const msgc = E8B.Compress(msg);
+        this._ws.send(msgc);
+        this._measure_tx += msgc.length;
     }
 }
 

@@ -529,6 +529,18 @@ class UI_ServerLine extends UI_Button {
         this._private_text.position.set(l.private, this._y);
         this._ping_text.position.set(l.ping, this._y);
     }
+    
+    UpdateServerLine(s) {
+        this._text.text = s.name;
+        this._map_text.text = s.map;
+
+        this._players_str = "" + s.players.current + "/" + s.players.max;
+        this._players_text.text = this._players_str;
+
+        this._private_str = s.private ? "Yes" : "No";
+        this._private_text.text = this._private_str;
+        // TODO: ping text...
+    }
 }
 
 class UI_Menu {
@@ -1129,11 +1141,8 @@ class UI_OnlinePlay extends UI_Menu {
         this._checked = false;
 
         this._net_failed = false;
-        
-        // TODO: move this to when we receive lobby info.
-        // const esl = new UI_ServerLine(400, this._list_width, "Example Lobby", "Kansas", {current:0, max:10}, false, -1);
-        // esl.UpdateTextLefts(this._TextLeftPositions());
-        // this._buttons.push(esl);
+
+        this._servers = {};
     }
 
     _UpdatePing(p) {
@@ -1149,6 +1158,13 @@ class UI_OnlinePlay extends UI_Menu {
                 tsent: Sigs(window.performance.now()),
                 cID: this._clientID,
             },
+        }));
+        
+        // Get a list of active servers.
+        network.ClientSend(JSON.stringify({
+            type: "servers",
+            reqID: GenRequestID(6),
+            spec: {},
         }));
     }
 
@@ -1201,11 +1217,32 @@ class UI_OnlinePlay extends UI_Menu {
                         console.log("Failed server check!!");
                     }
                 } else if (rxp.type === "servers-response") {
+                    let servers_got = [];
                     for (let i = 0; i < rxp.spec.servers.length; i++) {
                         const serv = rxp.spec.servers[i];
-                        const esl = new UI_ServerLine(300+i*60, this._list_width, serv.name, serv.map, serv.players, serv.private, -1, serv.port);
-                        esl.UpdateTextLefts(this._TextLeftPositions());
-                        this._buttons.push(esl);
+
+                        if (serv.name in this._servers) {
+                            this._buttons[this._servers[serv.name]].UpdateServerLine(rxp.spec.servers[i]);
+                        } else {
+                            const esl = new UI_ServerLine(300+i*60, this._list_width, serv.name, serv.map, serv.players, serv.private, -1, serv.port);
+                            esl.UpdateTextLefts(this._TextLeftPositions());
+                            this._servers[serv.name] = this._buttons.length;
+                            this._buttons.push(esl);
+                        }
+
+                        servers_got.push(serv.name);
+                    }
+
+                    // Remove servers that no longer exist (if any).
+                    for (let k in this._servers) {
+                        if (servers_got.indexOf(k) === -1) {
+                            console.log("Found a dead (old) server");
+                            console.log("TODO: push servers below this one upwards.");
+
+                            this._buttons[this._servers[k]].Destroy();
+                            this._buttons.splice(this._servers[k], 1);
+                            delete this._servers[k];
+                        }
                     }
                 }
             }

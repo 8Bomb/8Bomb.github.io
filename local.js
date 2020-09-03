@@ -100,6 +100,8 @@ class UI_Online extends UI_Menu {
 
         this.paused = true;
         this.Toggle();
+
+        this._showing_leader_text = false;
     }
 
     Tick(dT) {
@@ -142,6 +144,24 @@ class UI_Online extends UI_Menu {
         }
     }
 
+    BecomeLeader() {
+        if (this._showing_leader_text === true) {
+            console.log("DEBUG: already leader...");
+            return;
+        }
+        
+        this._showing_leader_text = true;
+
+        this._leader_str = "Leader Action Keys:\n1: Reset Lobby\n2: Start Bombs";
+        this._leader_text = new PIXI.Text(this._leader_str,
+            {fontFamily:"monospace", fontSize:14, fill:0xffffff, align:"left",
+            wordWrap:true, wordWrapWidth:200, lineHeight:20});
+        this._leader_text.position.set(10, 14);
+        this._leader_text.anchor.set(0, 0);
+        ui.addChild(this._leader_text);
+        this._texts.push(this._leader_text);
+    }
+
     Draw() {
         super.Draw();
 
@@ -176,6 +196,8 @@ class LocalPlay {
         this._ui = new UI_Online();
 
         this._ids_to_apply_tex = [];
+
+        this._am_i_leader = false;
         
         if (textures_cache.loaded === false) {
             const loader = new PIXI.Loader(); // you can also create your own if you want
@@ -283,6 +305,9 @@ class LocalPlay {
                         this._failed = true;
                         stage_actions.push("connect failed");
                     }
+                } else if (rxp.type === "become-leader") {
+                    console.log("Got become leader from server");
+                    this._BecomeLeader();
                 } else if (rxp.type === "8B") {
                     if (rxp.spec.a === "aur") {
                         let lost = "LOST ";
@@ -349,6 +374,16 @@ class LocalPlay {
                 }
             }
         }
+    }
+
+    _BecomeLeader() {
+        if (this._am_i_leader === true) {
+            console.log("DEBUG: already leader...");
+            return;
+        }
+
+        this._am_i_leader = true;
+        this._ui.BecomeLeader();
     }
 
     Start() {}

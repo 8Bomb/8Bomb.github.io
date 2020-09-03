@@ -101,6 +101,8 @@ spec: specifications
         type: usually "key"
         key: key in string format
         down: true of false
+    players: retreive players from backend
+        cID: client ID
 
 ---------------------------------------------------------------------------------------------------
 SERVER -> CLIENT
@@ -134,5 +136,10 @@ spec:
     connect-response:
         reqID: request ID being referenced, must match
         good: 1,
-        cID: client id given to corresponding client
+        color: color given to this client,
+        texture_num: texture number given to this client,
+    players-response:
+        reqID: request ID being referenced, must match
+        players: dict of {current:C, max:M} with values for C and M
     8B: see top for game messages - different, efficient format
+    become-leader: Recipient will become lobby leader
