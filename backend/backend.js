@@ -115,6 +115,10 @@ const play_opts = {
 class Engine_8Bomb {
     constructor() {
         this._objs = {};
+        // _bodies is used for collisions.
+        this._bodies = {grounds: [], walls: [], bombs: [], users: [], powerups: []};
+        // _bodies_map is a parallel array, used to map "matter body id" back to Engine id.
+        this._bodies_map = {};
         
         this._ge_wid = 2;
         this._ground_wid = ENGINE_WIDTH / this._ge_wid;
@@ -159,12 +163,13 @@ class Engine_8Bomb {
         console.log("ENGINE creating new world.");
 
         for (let i = 0; i < this._ground_wid; i++) {
-            this._objs[this._NewID(this._keylen)] = new GroundElement(-ENGINE_WIDTH/2 + this._ge_wid*i, this._ground_height, this._ge_wid, this._ground_dist_to_bot);
+            this._AddObj(this._NewID(this._keylen),
+                new GroundElement(-ENGINE_WIDTH/2 + this._ge_wid*i, this._ground_height, this._ge_wid, this._ground_dist_to_bot));
         }
 
         // Bomb spawner.
         this._bomb_spawner = this._NewID(this._keylen);
-        this._objs[this._bomb_spawner] = new BombSpawner(0, -ENGINE_HEIGHT/2 - 20, ENGINE_WIDTH - 40);
+        this._AddObj(this._bomb_spawner, new BombSpawner(0, -ENGINE_HEIGHT/2 - 20, ENGINE_WIDTH - 40));
         
         // Magma.
         //this._magma = this._NewID(this._keylen);
@@ -186,8 +191,7 @@ class Engine_8Bomb {
                 continue;
             }
 
-            this._objs[k].Destroy();
-            delete this._objs[k];
+            this._RemoveObj(k);
         }
     }
 
@@ -292,10 +296,7 @@ class Engine_8Bomb {
                 a: "r",
                 i: id,
             });
-            if (this._objs[id] !== undefined) {
-                this._objs[id].Destroy();
-            }
-            delete this._objs[id];
+            this._RemoveObj(id);
             this._rmQ.splice(0, 1);
         }
 
@@ -364,12 +365,12 @@ class Engine_8Bomb {
 
     AddBomb(x, y, r, t) {
         const id = this._NewID(this._keylen);
-        this._objs[id] = new Bomb(x, y, r, t);
+        this._AddObj(id, new Bomb(x, y, r, t));
     }
     
     AddPowerup(x, y, s) {
         const id = this._NewID(this._keylen);
-        this._objs[id] = new Powerup(x, y, s, 0);
+        this._AddObj(id, new Powerup(x, y, s, 0));
     }
 	
 	Magma() {
@@ -449,7 +450,7 @@ class Engine_8Bomb {
 						console.log("TODO: got a duplicated connect?");
 					}
 					let id = this._NewID(this._keylen);
-					this._objs[id] = new UserBall(0, -ENGINE_HEIGHT/2, cc, ctn);
+					this._AddObj(id, new UserBall(0, -ENGINE_HEIGHT/2, cc, ctn));
 					this._clients[cid] = {
                         id: id,
                     };
@@ -526,6 +527,42 @@ class Engine_8Bomb {
 		}
     }
 
+    _AddObj(id, o) {
+        this._objs[id] = o;
+        let added = false;
+        if (o.type === "g") {
+            this._bodies.grounds.push(o._body);
+            added = true;
+        } else if (o.type === "p") {
+            this._bodies.powerups.push(o._body);
+            added = true;
+        }
+
+        if (added) {
+            this._bodies_map[o._body.id] = id;
+        }
+    }
+
+    _RemoveObj(id) {
+        const o = this._objs[id];
+
+        let a = null;
+        if (o.type === "g") {
+            a = this._bodies.grounds;
+        } else if (o.type === "p") {
+            a = this._bodies.powerups;
+        }
+        if (a !== null) {
+            delete this._bodies_map[o._body.id];
+            a.splice(a.indexOf(o._body), 1);
+        }
+
+        if (o !== undefined) {
+            o.Destroy();
+        }
+        delete this._objs[id];
+    }
+
     Tick(dT) {
         while (this._actionQ.length > 0) {
             if (this._actionQ[0].type === "remove-client") {
@@ -575,34 +612,16 @@ class Engine_8Bomb {
     }
     
     Collides(u) {
-        let colls = [];
-        let bs = [];
-        for (let k in this._objs) {
-            const o = this._objs[k];
-            if  (o.type === "g" || o.type === "w") {
-                bs.push(o._body);
+        let colls = Matter.Query.collides(u._body, this._bodies.grounds);
+        let pcolls = Matter.Query.collides(u._body, this._bodies.powerups);
+
+        if (pcolls.length > 0) {
+            const id = this._bodies_map[pcolls[0].bodyB.id];
+            if (u.CollectPowerup(this._objs[id])) {
+                this._rmQ.push(id);
             }
         }
-        colls = Matter.Query.collides(u._body, bs);
-        // TODO: something is not correct here?
-        // TODO: add "collect powerup" here
-        return colls;
 
-        for (let k in this._objs) {
-            const o = this._objs[k];
-            if (o === u) { continue; }
-            if (o.type === "g" || o.type === "w" || o.type === "b" || o.type === "u" || o.type === "p") {
-                if (Matter.SAT.collides(u._body, o._body).collided) {
-                    // If a player is collecting a powerup.
-                    if (o.type === "p" && u.type === "u" && u.powerup === -1) {
-                        u.CollectPowerup(o.texture_num);
-                        this._rmQ.push(k);
-                    }
-
-                    colls.push({obj:o, id:k});
-                }
-            }
-        }
         return colls;
     }
 
@@ -672,7 +691,7 @@ class Engine_8Bomb {
 
         // This seems to fix the increasing object count.
         for (let k in changes) {
-            this._objs[k] = changes[k];
+            this._AddObj(k, changes[k]);
         }
 
         for (let k in this._objs) {
@@ -687,8 +706,7 @@ class Engine_8Bomb {
         console.log("ENGINE destroying.");
 
         for (let k in this._objs) {
-            this._objs[k].Destroy();
-            delete this._objs[k];
+            this._RemoveObj(k);
         }
     }
 }
@@ -793,6 +811,8 @@ class UserBall {
         this._inside_ground = false;
 
         this._max_speed = 15;
+
+        this._powerup = -1;
     }
 
     Key(k, d) {
@@ -828,7 +848,12 @@ class UserBall {
     }
 
     CollectPowerup(t) {
-        this._powerup = t;
+        if (this._powerup === -1) {
+            console.log("cp");
+            this._powerup = t.texture_num;
+            return true;
+        }
+        return false;
     }
 
     Tick(dT) {
@@ -841,11 +866,10 @@ class UserBall {
         }
 
         const colls = engine.Collides(this);
-        const grounded = colls.length === 0;
+        const grounded = colls.length !== 0;
 
         // The player moves faster when grounded.
         if (grounded) {
-            console.log(colls[0]);
             this._jumpframes = this._jumpframes_max;
             if (this._keys.a) {
                 Body.applyForce(this._body, {x:this._body.position.x, y:this._body.position.y - this.radius/3}, {x:-0.0001,y:0});
