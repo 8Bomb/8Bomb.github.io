@@ -206,11 +206,13 @@ class LocalPlay {
             loader.add("balls", "gfx/ball_spritesheet.png");
             loader.add("explosion", "gfx/explosion_spritesheet.png");
             loader.add("bombs", "gfx/bomb_spritesheet.png");
+            loader.add("powerups", "gfx/powerup_spritesheet.png");
             
             loader.load((loader, resources) => {
                 textures_cache.ball_sprites = new PIXI.Texture(resources.balls.texture);
                 textures_cache.explosion_sprites = new PIXI.Texture(resources.explosion.texture);
                 textures_cache.bomb_sprites = new PIXI.Texture(resources.bombs.texture);
+                textures_cache.powerup_sprites = new PIXI.Texture(resources.powerups.texture);
             });
             
             let self = this;
@@ -331,6 +333,8 @@ class LocalPlay {
                                         this._objs[o.i] = new Draw_BombSpawner();
                                     } else if (o.t === "m") {
                                         this._objs[o.i] = new Draw_Magma(o.s.x, o.s.y, o.s.w, o.s.h);
+                                    } else if (o.t === "p") {
+                                        this._objs[o.i] = new Draw_Powerup(o.s.x, o.s.y, o.s.r, o.s.tn);
                                     }
                                     this._ids_to_apply_tex.push(o.i);
                                 } else {
@@ -339,7 +343,7 @@ class LocalPlay {
                                 // Update all objects.
                                 if (o.t === "w" || o.t === "g" || o.t === "m") {
                                     this._objs[o.i].Update(o.s.x, o.s.y);
-                                } else if (o.t === "b" || o.t === "u") {
+                                } else if (o.t === "b" || o.t === "u" || o.t === "p") {
                                     this._objs[o.i].Update(o.s.x, o.s.y, o.s.vx, o.s.vy, o.s.va, o.s.a);
                                 }
                             } else if (o.a === "r") {
@@ -730,15 +734,7 @@ class Draw_Bomb {
         }
     }
 
-    Draw() {
-        return;
-        if (this.active === false) { return; }
-
-        stage_graphics.lineStyle(1, MAP_COLORS[play_opts.map].magma, 1);
-        stage_graphics.beginFill(MAP_COLORS[play_opts.map].bomb);
-        stage_graphics.drawCircle(this.x, this.y, this.radius);
-        stage_graphics.endFill();
-    }
+    Draw() {}
 }
 
 class Draw_Pebble {
@@ -913,6 +909,70 @@ class Draw_Magma {
     }
 }
 
+class Draw_Powerup {
+    constructor(x, y, r, tn=0) {
+        this.x = x;
+        this.y = y;
+        this.radius = r;
+        this.color = tn === 0 ? 0xff0000 : 0xffffff;
+        this.type = "p";
+
+        this.active = true;
+
+        this._body = NewPowerup(this.x, this.y, this.radius);
+        this._body.collisionFilter.category = 1;
+        this._body.collisionFilter.mask = 3;
+        World.add(engine_local.world, [this._body]);
+
+        this._texture = null;
+        this._texture_num = tn;
+        this._tint = this.color;
+        this._sprite = null;
+    }
+    
+    ApplyTexture() {
+        this._texture = new PIXI.Texture(textures_cache.powerup_sprites,
+            new PIXI.Rectangle(this._texture_num, 0, 128, 128));
+        this._sprite = new PIXI.Sprite(this._texture);
+        this._sprite.width = this.radius*3/2;
+        this._sprite.height = this.radius*3/2;
+        this._sprite.position.set(this.x, this.y);
+        this._sprite.anchor.set(0.5);
+        this._sprite.tint = this._tint;
+        stage.addChild(this._sprite);
+    }
+
+    Destroy() {
+        this.active = false;
+        World.remove(engine_local.world, [this._body]);
+        
+        if (this._sprite !== null) {
+            stage.removeChild(this._sprite);
+        }
+    }
+    
+    Update(x, y, vx, vy, va, a) {
+        this.x = x;
+        this.y = y;
+        Body.setPosition(this._body, {x:x, y:y});
+        Body.setVelocity(this._body, {x:vx, y:vy});
+        Body.setAngularVelocity(this._body, va);
+        Body.setAngle(this._body, a);
+    }
+
+    Tick(dT) {
+        this.x = this._body.position.x;
+        this.y = this._body.position.y;
+
+        if (this._sprite !== null) {
+            this._sprite.position.set(this.x, this.y);
+            this._sprite.angle = this._body.angle * RAD_TO_DEG;
+        }
+    }
+
+    Draw() {}
+}
+
 // DEBUG: placeholder class
 class Draw_BombSpawner {
     constructor() {
@@ -997,6 +1057,7 @@ class Network {
         console.log("WS closed by server.");
 
         console.log("TODO: inform the client that the server stopped (if not already). Return to main.");
+        stage_actions.push("open main-menu");
     }
 
     _WSError(evt) {

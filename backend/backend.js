@@ -216,13 +216,13 @@ class Engine_8Bomb {
                 w: o.width,
                 h: o.height,
             };
-        } else if (type === "b" || type === "u") {
+        } else if (type === "b" || type === "u" || type === "p") {
             specs.s = {
                 x: o.x, y: o.y, r: o.radius,
                 vx: o.vx, vy: o.vy, va: o.va,
                 a: o.angle, c: o.color,
             }
-            if (type === "u") {
+            if (type === "u" || type === "p") {
                 specs.s.tn = o.texture_num;
             }
         }
@@ -281,7 +281,7 @@ class Engine_8Bomb {
         for (let k in this._objs) {
             const o = this._objs[k];
 
-            if (o.type !== "b" && o.type !== "u") { continue; }
+            if (o.type !== "b" && o.type !== "u" && o.type !== "p") { continue; }
 
             msg_8B.s.push(this._AddObjToSpec(k));
         }
@@ -365,7 +365,12 @@ class Engine_8Bomb {
     AddBomb(x, y, r, t) {
         const id = this._NewID(this._keylen);
         this._objs[id] = new Bomb(x, y, r, t);
-	}
+    }
+    
+    AddPowerup(x, y, s) {
+        const id = this._NewID(this._keylen);
+        this._objs[id] = new Powerup(x, y, s, 0);
+    }
 	
 	Magma() {
 		if (this._magma !== -1) {
@@ -569,14 +574,36 @@ class Engine_8Bomb {
         }
     }
     
-    Collides(b) {
+    Collides(u) {
+        let colls = [];
+        let bs = [];
         for (let k in this._objs) {
             const o = this._objs[k];
-            if (o.type === "g" || o.type === "w" || o.type === "b") {
-                if (Matter.SAT.collides(b, o._body).collided) { return true; }
+            if  (o.type === "g" || o.type === "w") {
+                bs.push(o._body);
             }
         }
-        return false;
+        colls = Matter.Query.collides(u._body, bs);
+        // TODO: something is not correct here?
+        // TODO: add "collect powerup" here
+        return colls;
+
+        for (let k in this._objs) {
+            const o = this._objs[k];
+            if (o === u) { continue; }
+            if (o.type === "g" || o.type === "w" || o.type === "b" || o.type === "u" || o.type === "p") {
+                if (Matter.SAT.collides(u._body, o._body).collided) {
+                    // If a player is collecting a powerup.
+                    if (o.type === "p" && u.type === "u" && u.powerup === -1) {
+                        u.CollectPowerup(o.texture_num);
+                        this._rmQ.push(k);
+                    }
+
+                    colls.push({obj:o, id:k});
+                }
+            }
+        }
+        return colls;
     }
 
     PointInsideGround(x, y) {
@@ -757,6 +784,7 @@ class UserBall {
 
         this.active = true;
         this.type = "u";
+        this.powerup = -1;
 
         this._keys = {w:false, a:false, s:false, d:false};
         
@@ -799,6 +827,10 @@ class UserBall {
         }
     }
 
+    CollectPowerup(t) {
+        this._powerup = t;
+    }
+
     Tick(dT) {
         if (!this.active) { return; }
         
@@ -808,10 +840,12 @@ class UserBall {
                 y:this._body.velocity.y / this._body.speed * this._max_speed});
         }
 
-        const grounded = engine.Collides(this._body);
+        const colls = engine.Collides(this);
+        const grounded = colls.length === 0;
 
         // The player moves faster when grounded.
         if (grounded) {
+            console.log(colls[0]);
             this._jumpframes = this._jumpframes_max;
             if (this._keys.a) {
                 Body.applyForce(this._body, {x:this._body.position.x, y:this._body.position.y - this.radius/3}, {x:-0.0001,y:0});
@@ -990,6 +1024,7 @@ class BombSpawner {
         if (Math.random() < this._spawn_chance) {
             this._spawn_chance = this._spawn_chance_starting;
             engine.AddBomb(this.left + this.width * Math.random(), this.y, 4+Math.random()*6, 2000*Math.random());
+            engine.AddPowerup(this.left + this.width * Math.random(), this.y, 10);
         } else {
             this._spawn_chance *= play_opts.bomb_factor === 0 ? 1.01 : 1.02;
         }
@@ -1017,6 +1052,55 @@ class Magma {
 
     Contains(x, y) {
         return x > this.left && x < this.right && y > this.top && y < this.bottom;
+    }
+}
+
+class Powerup {
+    constructor(x, y, s, t) {
+        this.x = x;
+        this.y = y;
+        this.radius = s;
+        this.left = x - s;
+        this.right = x + s;
+        this.top = y - s;
+        this.bottom = y + s;
+
+        this.active = true;
+        this.type = "p";
+
+        this.vx = 0;
+        this.vy = 0;
+        this.va = 0;
+        this.color = 0;
+        this.texture_num = t;
+        
+        this._body = E8B.NewPowerup(this.x, this.y, s);
+        World.add(matter_engine.world, [this._body]);
+        Body.setAngle(this._body, Math.random() * Math.PI*2);
+        this.angle = this._body.angle;
+
+        this._life_max = 10000;
+        this._life = this._life_max;
+    }
+
+    Destroy() {
+        this.active = false;
+        World.remove(matter_engine.world, [this._body]);
+    }
+
+    Tick(dT) {
+        this._life -= dT;
+
+        if (this._life < 0) {
+            this.active = false;
+        }
+        
+        this.x = E8B.Sigs(this._body.position.x);
+        this.y = E8B.Sigs(this._body.position.y);
+        this.vx = E8B.Sigs(this._body.velocity.x);
+        this.vy = E8B.Sigs(this._body.velocity.y);
+        this.va = E8B.Sigs(this._body.angularVelocity);
+        this.angle = E8B.Sigs(this._body.angle);
     }
 }
 

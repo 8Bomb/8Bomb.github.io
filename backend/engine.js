@@ -63,6 +63,11 @@ function NewBomb(x, y, r) {
     return b;
 }
 
+function NewPowerup(x, y, s) {
+    const p = Bodies.polygon(x, y, 3, s);
+    return p;
+}
+
 // Everything below is included so that Node.js can parse this file.
 this.GenRequestID = GenRequestID;
 this.Sigs = Sigs;
@@ -71,4 +76,5 @@ this.DarkenColor = DarkenColor;
 this.Compress = Compress;
 this.Decompress = Decompress;
 this.NewBomb = NewBomb;
+this.NewPowerup = NewPowerup;
 this.RandomName = RandomName;

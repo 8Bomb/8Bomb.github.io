@@ -49,14 +49,16 @@ s: specs (array)
         bs: bomb spawner
         m: magma
         e: explosion
+        p: powerup
     s: specifications, dependent on type
         x: x (always center of obj)
         y: y (always center of obj)
         vx: velocity x
         vy: velocity y
-        w: width
-        h: height
         r: radius
+        va: angular velocity
+        a: angle
+        tn: texture number
 
 ---------------------------------------------------------------------------------------------------
 CLIENT -> SERVER

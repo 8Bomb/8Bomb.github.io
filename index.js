@@ -77,6 +77,7 @@ let textures_cache = {
     ball_sprites: null,
     explosion_sprites: null,
     bomb_sprites: null,
+    powerup_sprites: null,
 };
 
 const FPS_LOG_RATE = 10000; // ms
