@@ -410,6 +410,8 @@ class LocalPlay {
     }
 
     Destroy() {
+        ui.removeChild(this._died_text);
+
         this._ui.Destroy();
         this.Stop();
         network.Destroy();

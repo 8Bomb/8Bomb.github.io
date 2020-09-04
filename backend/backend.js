@@ -141,9 +141,6 @@ class Engine_8Bomb {
         this._rmQ = [];
         this._addQ = [];
 
-        this._bomb_added = 0;
-        this._bomb_removed = 0;
-
         this._keylen = 5;
 
         this._updates_num = 0;
@@ -546,18 +543,20 @@ class Engine_8Bomb {
     _RemoveObj(id) {
         const o = this._objs[id];
 
-        let a = null;
-        if (o.type === "g") {
-            a = this._bodies.grounds;
-        } else if (o.type === "p") {
-            a = this._bodies.powerups;
-        }
-        if (a !== null) {
-            delete this._bodies_map[o._body.id];
-            a.splice(a.indexOf(o._body), 1);
-        }
-
+        // TODO: why does this need to be checked?
         if (o !== undefined) {
+            // Need to remove mapping from bodies_map
+            let a = null;
+            if (o.type === "g") {
+                a = this._bodies.grounds;
+            } else if (o.type === "p") {
+                a = this._bodies.powerups;
+            }
+            if (a !== null) {
+                delete this._bodies_map[o._body.id];
+                a.splice(a.indexOf(o._body), 1);
+            }
+
             o.Destroy();
         }
         delete this._objs[id];
@@ -659,7 +658,6 @@ class Engine_8Bomb {
                             let id = this._NewID(this._keylen);
                             changes[id] = new GroundElement(o.left, yb + 1, o.width, o.bottom - (yb + 1));
                             this._addQ.push(id);
-                            this._bomb_added++;
                         }
 
                         // Check if upper element should be added.
@@ -669,7 +667,6 @@ class Engine_8Bomb {
                                 let id = this._NewID(this._keylen);
                                 changes[id] = new GroundElement(o.left, o.top, o.width, ht);
                                 this._addQ.push(id);
-                                this._bomb_added++;
                             }
                             gotone = true;
                         }
@@ -682,7 +679,6 @@ class Engine_8Bomb {
                         // Remove old element.
                         if (gotone) {
                             this._rmQ.push(k);
-                            this._bomb_removed++;
                         }
                     }
                 }
@@ -698,6 +694,27 @@ class Engine_8Bomb {
             const o = this._objs[k];
             if (o.type === "u") {
                 o.Bomb(x, y, r);
+            }
+        }
+    }
+
+    ApplyPowerup(o, t) {
+        // Types: 0=vertical blast
+        if (t === 0) {
+            o.ApplyForce(0, -0.001);
+            this._VerticalBlast(o.x, o.y, 20);
+        }
+    }
+
+    _VerticalBlast(x, y, w) {
+        for (let xp = x - w/2; xp < x + w/2; xp += this._ge_wid) {
+            for (let k in this._objs) {
+                const o = this._objs[k];
+                if (o.type !== "g") { continue; }
+
+                if (o.WithinXBounds(xp)) {
+                    this._rmQ.push(k);
+                }
             }
         }
     }
@@ -842,14 +859,17 @@ class UserBall {
         const str = Math.min(r - hyp / 1000000, 0.0001);
 
         if (hyp < r) {
-            Body.applyForce(this._body, {x:this.x, y:this.x},
+            Body.applyForce(this._body, {x:this.x, y:this.y},
                 {x: (this.x - x)*str, y: (this.y - y)*str});
         }
     }
 
+    ApplyForce(x, y) {
+        Body.applyForce(this._body, {x:this.x, y:this.y}, {x:x, y:y});
+    }
+
     CollectPowerup(t) {
         if (this._powerup === -1) {
-            console.log("cp");
             this._powerup = t.texture_num;
             return true;
         }
@@ -917,6 +937,11 @@ class UserBall {
                 this._inside_ground_timer = this._inside_ground_rate;
                 this._inside_ground = engine.PointInsideGround(this.x + Math.random(), this.y + this.radius*0.8);
             }
+        }
+
+        if (this._keys["e"] && this._powerup !== -1) {
+            engine.ApplyPowerup(this, this._powerup);
+            this._powerup = -1;
         }
 
         this.x = E8B.Sigs(this._body.position.x);
