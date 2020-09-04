@@ -76,6 +76,7 @@ let textures_cache = {
     loaded: false,
     ball_sprites: null,
     explosion_sprites: null,
+    bomb_sprites: null,
 };
 
 const FPS_LOG_RATE = 10000; // ms
@@ -1224,7 +1225,7 @@ class UI_OnlinePlay extends UI_Menu {
                         if (serv.name in this._servers) {
                             this._buttons[this._servers[serv.name]].UpdateServerLine(rxp.spec.servers[i]);
                         } else {
-                            const esl = new UI_ServerLine(300+i*60, this._list_width, serv.name, serv.map, serv.players, serv.private, -1, serv.port);
+                            const esl = new UI_ServerLine(290+i*60, this._list_width, serv.name, serv.map, serv.players, serv.private, -1, serv.port);
                             esl.UpdateTextLefts(this._TextLeftPositions());
                             this._servers[serv.name] = this._buttons.length;
                             this._buttons.push(esl);

@@ -111,8 +111,15 @@ class Dispatcher {
 
 		this._server_net_timer = SERVER_NET_RATE;
 
-		this._AddServer("Test Server", 5061);
-		this._AddServer("Other Test Server", 5062);
+		this._n_servers_base = 3;
+
+		for (let i = 0; i < this._n_servers_base; i++) {
+			let name = E8B.RandomName();
+			while (name in this._servers) {
+				name = E8B.RandomName();
+			}
+			this._AddServer(E8B.RandomName(), 5061+i);
+		}
 	}
 
 	Destroy() {

@@ -205,10 +205,12 @@ class LocalPlay {
             // Chainable `add` to enqueue a resource
             loader.add("balls", "gfx/ball_spritesheet.png");
             loader.add("explosion", "gfx/explosion_spritesheet.png");
+            loader.add("bombs", "gfx/bomb_spritesheet.png");
             
             loader.load((loader, resources) => {
                 textures_cache.ball_sprites = new PIXI.Texture(resources.balls.texture);
                 textures_cache.explosion_sprites = new PIXI.Texture(resources.explosion.texture);
+                textures_cache.bomb_sprites = new PIXI.Texture(resources.bombs.texture);
             });
             
             let self = this;
@@ -653,10 +655,6 @@ class Draw_UserBall {
         }
 
         this._last_speed = new_speed;
-
-        if (this._sprite !== null) {
-            this._sprite.angle = a * RAD_TO_DEG;
-        }
     }
 
     Tick(dT) {
@@ -673,7 +671,7 @@ class Draw_UserBall {
 }
 
 class Draw_Bomb {
-    constructor(x, y, r, c) {
+    constructor(x, y, r, c, tn=0) {
         this.x = x;
         this.y = y;
         this.radius = r;
@@ -686,13 +684,31 @@ class Draw_Bomb {
         this._body.collisionFilter.category = 1;
         this._body.collisionFilter.mask = 3;
         World.add(engine_local.world, [this._body]);
-    }
 
-    ApplyTexture() {}
+        this._texture = null;
+        this._texture_num = tn;
+        this._tint = null;
+        this._sprite = null;
+    }
+    
+    ApplyTexture() {
+        this._texture = new PIXI.Texture(textures_cache.bomb_sprites, 
+            new PIXI.Rectangle(0, 128*this._texture_num, 128, 128));
+        this._sprite = new PIXI.Sprite(this._texture);
+        this._sprite.width = this.radius*2;
+        this._sprite.height = this.radius*2;
+        this._sprite.position.set(this.x, this.y);
+        this._sprite.anchor.set(0.5);
+        stage.addChild(this._sprite);
+    }
 
     Destroy() {
         this.active = false;
         World.remove(engine_local.world, [this._body]);
+        
+        if (this._sprite !== null) {
+            stage.removeChild(this._sprite);
+        }
     }
     
     Update(x, y, vx, vy, va, a) {
@@ -707,9 +723,15 @@ class Draw_Bomb {
     Tick(dT) {
         this.x = this._body.position.x;
         this.y = this._body.position.y;
+
+        if (this._sprite !== null) {
+            this._sprite.position.set(this.x, this.y);
+            this._sprite.angle = this._body.angle * RAD_TO_DEG;
+        }
     }
 
     Draw() {
+        return;
         if (this.active === false) { return; }
 
         stage_graphics.lineStyle(1, MAP_COLORS[play_opts.map].magma, 1);

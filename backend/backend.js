@@ -893,6 +893,7 @@ class Bomb {
         this.active = true;
 
         this._lifetime = t;
+        this._hit_ground = false;
 
         this._explosion_radius = this.radius * 5;
 
@@ -912,10 +913,12 @@ class Bomb {
     Tick(dT) {
         if (!this.active) { return; }
 
-        this._lifetime -= dT;
-        
-        if (this._lifetime <= 0) {
-            this.Destroy();
+        if (this._hit_ground) {
+            this._lifetime -= dT;
+            
+            if (this._lifetime <= 0) {
+                this.Destroy();
+            }
         }
 
         // If we found that this was stuck in the ground previously.
@@ -937,10 +940,14 @@ class Bomb {
             }
         }
 
+        const newvy = E8B.Sigs(this._body.velocity.y);
+        if (Math.abs(newvy - this.vy) > 1) {
+            this._hit_ground = true;
+        }
         this.x = E8B.Sigs(this._body.position.x);
         this.y = E8B.Sigs(this._body.position.y);
         this.vx = E8B.Sigs(this._body.velocity.x);
-        this.vy = E8B.Sigs(this._body.velocity.y);
+        this.vy = newvy;
         this.va = E8B.Sigs(this._body.angularVelocity);
         this.angle = E8B.Sigs(this._body.angle);
     }
@@ -982,7 +989,7 @@ class BombSpawner {
 
         if (Math.random() < this._spawn_chance) {
             this._spawn_chance = this._spawn_chance_starting;
-            engine.AddBomb(this.left + this.width * Math.random(), this.y, 4+Math.random()*6, 3000 + 3000*Math.random());
+            engine.AddBomb(this.left + this.width * Math.random(), this.y, 4+Math.random()*6, 2000*Math.random());
         } else {
             this._spawn_chance *= play_opts.bomb_factor === 0 ? 1.01 : 1.02;
         }
