@@ -39,7 +39,7 @@ a: action
 s: specs (array)
     a: action
         u: update (same as add)
-        e: explode
+        r: remove
     i: id
     t: type
         w: wall

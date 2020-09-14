@@ -141,7 +141,7 @@ class Dispatcher {
 			map: m,
 			players: pl,
 			private: pr,
-			process: spawn("node", ["backend.js", p]),
+			process: spawn("node", ["./backend.js", p]),
 		};
 		this._servers[n].process.stdout.on("data", function (data) {
 			process.stdout.write("P("+p+"): " + data);

@@ -1063,6 +1063,7 @@ class BombSpawner {
 
         this._spawn_chance_starting = play_opts.bomb_factor === 0 ? 0.002 : play_opts.bomb_factor === 1 ? 0.008 : 0.02;
         this._spawn_chance = this._spawn_chance_starting;
+        this._bomb_chance = 0.8; // vs powerup chance
     }
 
     Destroy() {}
@@ -1072,8 +1073,11 @@ class BombSpawner {
 
         if (Math.random() < this._spawn_chance) {
             this._spawn_chance = this._spawn_chance_starting;
-            engine.AddBomb(this.left + this.width * Math.random(), this.y, 4+Math.random()*6, 2000*Math.random());
-            engine.AddPowerup(this.left + this.width * Math.random(), this.y, 10);
+            if (Math.random() < this._bomb_chance) {
+                engine.AddBomb(this.left + this.width * Math.random(), this.y, 4+Math.random()*6, 2000*Math.random());
+            } else {
+                engine.AddPowerup(this.left + this.width * Math.random(), this.y, 10);
+            }
         } else {
             this._spawn_chance *= play_opts.bomb_factor === 0 ? 1.01 : 1.02;
         }
