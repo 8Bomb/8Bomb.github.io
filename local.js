@@ -207,12 +207,14 @@ class LocalPlay {
             loader.add("explosion", "gfx/explosion_spritesheet.png");
             loader.add("bombs", "gfx/bomb_spritesheet.png");
             loader.add("powerups", "gfx/powerup_spritesheet.png");
+            loader.add("ground", "gfx/ground.png");
             
             loader.load((loader, resources) => {
                 textures_cache.ball_sprites = new PIXI.Texture(resources.balls.texture);
                 textures_cache.explosion_sprites = new PIXI.Texture(resources.explosion.texture);
                 textures_cache.bomb_sprites = new PIXI.Texture(resources.bombs.texture);
                 textures_cache.powerup_sprites = new PIXI.Texture(resources.powerups.texture);
+                textures_cache.ground = new PIXI.Texture(resources.ground.texture);
             });
             
             let self = this;
@@ -304,6 +306,11 @@ class LocalPlay {
                         console.log("Got good connection to server");
                         //console.log("color: " + rxp.spec.color);
                         this._connected = true;
+                        play_opts.gulx = rxp.spec.gulx;
+                        play_opts.guly = rxp.spec.guly;
+                        play_opts.gw = rxp.spec.gw;
+                        play_opts.gh = rxp.spec.gh;
+                        console.log(play_opts);
                     } else {
                         console.log("FAILED. Connect got good=false.");
                         this._failed = true;
@@ -578,14 +585,30 @@ class Draw_GroundElement {
         this._body.collisionFilter.mask = 7;
 
         World.add(engine_local.world, [this._body]);
-    }
 
-    ApplyTexture() {}
+        this._texture = null;
+        this._sprite = null;
+    }
+    
+    ApplyTexture() {
+        const tcfx = textures_cache.ground.width / play_opts.gw;
+        const tcfy = textures_cache.ground.height / play_opts.gh;
+        this._texture = new PIXI.Texture(textures_cache.ground,
+            new PIXI.Rectangle(Sigs((this.left - play_opts.gulx) * tcfx),
+            Sigs((this.top - play_opts.guly) * tcfy), Sigs(this.width * tcfx), Sigs(this.height * tcfy)));
+        this._sprite = new PIXI.Sprite(this._texture);
+        this._sprite.width = this.width;
+        this._sprite.height = this.height;
+        this._sprite.position.set(this.x, this.y);
+        this._sprite.anchor.set(0.5);
+        stage.addChild(this._sprite);
+    }
 
     Tick(dT) {}
 
     Destroy() {
         World.remove(engine_local.world, [this._body]);
+        stage.removeChild(this._sprite);
     }
 
     Update(x, y) {

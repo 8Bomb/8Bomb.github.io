@@ -106,6 +106,12 @@ const FPS_LOG_RATE = 10000; // ms
 
 const GROUND_COLLISION_RATE = 1000; // ms
 
+const GROUND_UL_X = -ENGINE_WIDTH/2;
+const GROUND_UL_Y = -ENGINE_HEIGHT/2 + 300;
+const GROUND_EL_WID = 2;
+const GROUND_WIDTH = ENGINE_WIDTH;
+const GROUND_HEIGHT = ENGINE_HEIGHT - GROUND_UL_Y - 300;
+
 const play_opts = {
 	map: "Kansas",
 	gravity: 1,
@@ -119,11 +125,6 @@ class Engine_8Bomb {
         this._bodies = {grounds: [], walls: [], bombs: [], users: [], powerups: []};
         // _bodies_map is a parallel array, used to map "matter body id" back to Engine id.
         this._bodies_map = {};
-        
-        this._ge_wid = 2;
-        this._ground_wid = ENGINE_WIDTH / this._ge_wid;
-        this._ground_height = -ENGINE_HEIGHT/2 + 300;
-        this._ground_dist_to_bot = ENGINE_HEIGHT/2 - this._ground_height;
 
         this._clients = {};
 
@@ -159,9 +160,9 @@ class Engine_8Bomb {
     _CreateWorld() {
         console.log("ENGINE creating new world.");
 
-        for (let i = 0; i < this._ground_wid; i++) {
+        for (let i = 0; i < GROUND_WIDTH / GROUND_EL_WID; i++) {
             this._AddObj(this._NewID(this._keylen),
-                new GroundElement(-ENGINE_WIDTH/2 + this._ge_wid*i, this._ground_height, this._ge_wid, this._ground_dist_to_bot));
+                new GroundElement(GROUND_UL_X + GROUND_EL_WID*i, GROUND_UL_Y, GROUND_EL_WID, GROUND_HEIGHT));
         }
 
         // Bomb spawner.
@@ -461,6 +462,10 @@ class Engine_8Bomb {
 							good: true,
                             color: cc,
                             texture_num: ctn,
+                            gulx: GROUND_UL_X,
+                            guly: GROUND_UL_Y,
+                            gw: GROUND_WIDTH,
+                            gh: GROUND_HEIGHT,
 						}
                     }), cid);
                     
@@ -640,7 +645,7 @@ class Engine_8Bomb {
     
     Bomb(x, y, r=30) {
         let changes = {};
-        for (let xp = x - r + 1; xp < x + r - 1; xp += this._ge_wid) {
+        for (let xp = x - r + 1; xp < x + r - 1; xp += GROUND_EL_WID) {
             const yd = fmath.sin(Math.acos((x - xp) / r)) * r;
             const yb = y + yd;
             const yt = y - yd;
@@ -663,7 +668,7 @@ class Engine_8Bomb {
                         // Check if upper element should be added.
                         if (o.top < yt && yt < o.bottom) {
                             const ht = (yt - o.top) - 1;
-                            if (ht > this._ge_wid) {
+                            if (ht > GROUND_EL_WID) {
                                 let id = this._NewID(this._keylen);
                                 changes[id] = new GroundElement(o.left, o.top, o.width, ht);
                                 this._addQ.push(id);
@@ -707,7 +712,7 @@ class Engine_8Bomb {
     }
 
     _VerticalBlast(x, y, w) {
-        for (let xp = x - w/2; xp < x + w/2; xp += this._ge_wid) {
+        for (let xp = x - w/2; xp < x + w/2; xp += GROUND_EL_WID) {
             for (let k in this._objs) {
                 const o = this._objs[k];
                 if (o.type !== "g") { continue; }

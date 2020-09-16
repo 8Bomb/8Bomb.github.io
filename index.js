@@ -57,6 +57,10 @@ const BOMB_COLORS = {
 };
 let color_scheme = COLORS.GRAND_CANYON;
 
+PIXI.settings.SCALE_MODE = PIXI.SCALE_MODES.NEAREST;
+PIXI.settings.RENDER_OPTIONS.roundPixels = true;
+PIXI.settings.RENDER_OPTIONS.antialias = false;
+
 const app = new PIXI.Application({
     width: WIDTH,
     height: HEIGHT,
@@ -78,6 +82,7 @@ let textures_cache = {
     explosion_sprites: null,
     bomb_sprites: null,
     powerup_sprites: null,
+    ground: null,
 };
 
 const FPS_LOG_RATE = 10000; // ms
@@ -172,6 +177,10 @@ let play_opts = {
     bomb_shape: "Dynamite",
     gravity: 1,
     bomb_factor: 1,
+    gulx: 0,
+    guly: 0,
+    gw: 0,
+    gh: 0,
 };
 
 // DEBUG

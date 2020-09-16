@@ -117,7 +117,10 @@ Server responds with a SC_Init message.
     "spec": {
         "reqID": "8Doj0y",
         "good": true,
-        "cID": "bj12ffDP",
+        gulx: 100,
+        guly: 200,
+        gw: 600,
+        gh: 300,
     },
 }
 
@@ -138,8 +141,10 @@ spec:
     connect-response:
         reqID: request ID being referenced, must match
         good: 1,
-        color: color given to this client,
-        texture_num: texture number given to this client,
+        gulx: ground upper left x
+        guly: ground upper left y
+        gw: ground width
+        gh: ground height
     players-response:
         reqID: request ID being referenced, must match
         players: dict of {current:C, max:M} with values for C and M
