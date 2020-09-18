@@ -105,6 +105,8 @@ spec: specifications
         down: true of false
     players: retreive players from backend
         cID: client ID
+    getobjid: retrieve object id for given client ID
+        cID: client ID
 
 ---------------------------------------------------------------------------------------------------
 SERVER -> CLIENT
@@ -150,3 +152,6 @@ spec:
         players: dict of {current:C, max:M} with values for C and M
     8B: see top for game messages - different, efficient format
     become-leader: Recipient will become lobby leader
+    getobjid-response: respond with world object id of player's ball
+        reqID: request ID being referenced, must match
+        objID: object ID for player

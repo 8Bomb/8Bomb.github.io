@@ -522,6 +522,15 @@ class Engine_8Bomb {
                             }
                         },
                     }), rxp.spec.cID);
+                } else if (rxp.type === "getobjid") {
+                    network.ServerSend(JSON.stringify({
+                        type: "getobjid-response",
+                        resID: E8B.GenRequestID(6),
+                        spec: {
+                            reqID: rxp.reqID,
+                            objID: this._clients[rxp.spec.cID].id,
+                        },
+                    }), rxp.spec.cID);
                 } else {
 					console.log("Server couldn't handle " + rxp.type);
 				}

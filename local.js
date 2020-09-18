@@ -193,6 +193,8 @@ class LocalPlay {
 
         this._clientID = "";
 
+        this._objID = ""; // object id of player's userball
+
         this._ui = new UI_Online();
 
         this._ids_to_apply_tex = [];
@@ -311,6 +313,14 @@ class LocalPlay {
                         play_opts.gw = rxp.spec.gw;
                         play_opts.gh = rxp.spec.gh;
                         console.log(play_opts);
+
+                        network.ClientSend(JSON.stringify({
+                            type: "getobjid",
+                            reqID: GenRequestID(6),
+                            spec: {
+                                cID: this._clientID,
+                            },
+                        }));
                     } else {
                         console.log("FAILED. Connect got good=false.");
                         this._failed = true;
@@ -382,6 +392,8 @@ class LocalPlay {
                         // TODO: probably not the best way to remove.
                         this._objs[rxp.spec.i].Destroy();
                     }
+                } else if (rxp.type === "getobjid-response") {
+                    this._objID = rxp.spec.objID;
                 } else {
                     console.log("Client couldn't handle " + rxp.type);
                 }
@@ -524,6 +536,15 @@ class LocalPlay {
 
         for (let i = 0; i < this._gfx.length; i++) {
             this._gfx[i].Draw();
+        }
+
+        stage_graphics.lineStyle(0x0000ff, 4);
+        stage_graphics.beginFill(0xff0000);
+        stage_graphics.drawRect(WIDTH/2, HEIGHT/2, 100, 100);
+        stage_graphics.endFill();
+
+        if (this._objID !== "") {
+            console.log("TODO: draw some kind of overlay");
         }
     }
 }

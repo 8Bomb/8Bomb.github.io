@@ -58,7 +58,7 @@ const BOMB_COLORS = {
 let color_scheme = COLORS.GRAND_CANYON;
 
 PIXI.settings.SCALE_MODE = PIXI.SCALE_MODES.NEAREST;
-PIXI.settings.RENDER_OPTIONS.roundPixels = true;
+PIXI.settings.ROUND_PIXELS = true;
 PIXI.settings.RENDER_OPTIONS.antialias = false;
 
 const app = new PIXI.Application({
