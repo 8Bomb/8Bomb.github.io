@@ -135,7 +135,7 @@ class Dispatcher {
 		}
 
 		this._servers[n] = {
-			conn: new Dispatcher_Network("ws://localhost:" + p),
+			conn: null,
 			cID: null,
 			port: p,
 			map: m,
@@ -149,6 +149,12 @@ class Dispatcher {
 		this._servers[n].process.stderr.on("data", function (data) {
 			process.stdout.write("E("+p+"): " + data);
 		});
+
+		let serv = this._servers[n];
+		setTimeout(function () {
+			const prefix = LOCAL ? "ws://localhost:" : "wss://skyhoffert-backend.com:";
+			serv.conn = new Dispatcher_Network(prefix + p);
+		}, 1000);
 	}
 
 	_DestroyServer(n) {
@@ -206,6 +212,7 @@ class Dispatcher {
 	_HandleServerNetwork() {
 		for (let k in this._servers) {
 			const c = this._servers[k].conn;
+			if (c === null) { continue; }
 
 			while (c.HasData()) {
 				const rx = c.ClientRecv();
@@ -356,6 +363,8 @@ class Dispatcher_Network {
     }
 
     _WSError(evt) {
+		console.log("WS error!");
+		console.log(evt.message);
         this.failed = true;
     }
 

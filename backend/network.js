@@ -34,7 +34,10 @@ class Network {
 		});
 		evt.on("message", function (evt) {
 			self.Message(evt, cid);
-		});
+        });
+        evt.on("error", function (evt) {
+            console.log(evt.message);
+        });
 
 		evt.send(E8B.Compress(JSON.stringify({
 			type: "open-response",
