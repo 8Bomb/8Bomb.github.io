@@ -210,6 +210,7 @@ class LocalPlay {
             loader.add("bombs", "gfx/bomb_spritesheet.png");
             loader.add("powerups", "gfx/powerup_spritesheet.png");
             loader.add("ground", "gfx/ground.png");
+            loader.add("various", "gfx/various_spritesheet.png");
             
             loader.load((loader, resources) => {
                 textures_cache.ball_sprites = new PIXI.Texture(resources.balls.texture);
@@ -217,6 +218,7 @@ class LocalPlay {
                 textures_cache.bomb_sprites = new PIXI.Texture(resources.bombs.texture);
                 textures_cache.powerup_sprites = new PIXI.Texture(resources.powerups.texture);
                 textures_cache.ground = new PIXI.Texture(resources.ground.texture);
+                textures_cache.various = new PIXI.Texture(resources.various.texture);
             });
             
             let self = this;
@@ -394,6 +396,9 @@ class LocalPlay {
                     }
                 } else if (rxp.type === "getobjid-response") {
                     this._objID = rxp.spec.objID;
+                    if (this._objID !== "") {
+                        this._objs[this._objID].LocalPlayer();
+                    }
                 } else {
                     console.log("Client couldn't handle " + rxp.type);
                 }
@@ -537,15 +542,6 @@ class LocalPlay {
         for (let i = 0; i < this._gfx.length; i++) {
             this._gfx[i].Draw();
         }
-
-        stage_graphics.lineStyle(0x0000ff, 4);
-        stage_graphics.beginFill(0xff0000);
-        stage_graphics.drawRect(WIDTH/2, HEIGHT/2, 100, 100);
-        stage_graphics.endFill();
-
-        if (this._objID !== "") {
-            console.log("TODO: draw some kind of overlay");
-        }
     }
 }
 
@@ -667,6 +663,12 @@ class Draw_UserBall {
 
         this._last_speed = 0;
         this._min_speed_for_pebbles = 1.5;
+
+        this._is_local_player = false;
+
+        this._arrow_texture = null;
+        this._arrow = null;
+        this._arrow_timer = 0;
     }
     
     ApplyTexture() {
@@ -679,6 +681,21 @@ class Draw_UserBall {
         this._sprite.anchor.set(0.5);
         this._sprite.tint = this.color;
         stage.addChild(this._sprite);
+
+        this._arrow_texture = new PIXI.Texture(textures_cache.various,
+            new PIXI.Rectangle(0, 0, 128, 128));
+        this._arrow = new PIXI.Sprite(this._arrow_texture);
+        this._arrow.width = 64;
+        this._arrow.height = 64;
+        this._arrow.position.set(this.x, this.y - this.radius*4);
+        this._arrow.anchor.set(0.5);
+        this._arrow.rotation = Math.PI/2;
+        stage.addChild(this._arrow);
+    }
+
+    LocalPlayer() {
+        this._is_local_player = true;
+        this._arrow_timer = 5000;
     }
 
     Destroy() {
@@ -686,6 +703,9 @@ class Draw_UserBall {
 
         if (this._sprite !== null) {
             stage.removeChild(this._sprite);
+        }
+        if (this._arrow !== null) {
+            stage.removeChild(this._arrow);
         }
     }
 
@@ -714,6 +734,16 @@ class Draw_UserBall {
         if (this._sprite !== null) {
             this._sprite.position.set(this.x, this.y);
             this._sprite.angle = this._body.angle * RAD_TO_DEG;
+            this._arrow.position.set(this.x, this.y - this.radius*4);
+        }
+        
+        if (this._arrow_timer > 0) {
+            this._arrow_timer -= dT;
+            if (this._arrow_timer <= 0) {
+                if (this._arrow !== null) {
+                    this._arrow.visible = false;
+                }
+            }
         }
     }
 
