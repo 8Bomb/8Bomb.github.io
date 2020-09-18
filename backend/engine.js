@@ -14,8 +14,8 @@ const World = Matter.World;
 const Bodies = Matter.Bodies;
 const Body = Matter.Body;
 
-const WORDS_ADJ = ["Elite", "Devilish", "Decent", "Even", "Cuddly", "Graceful", "Lovely",
-    "Mundane", "Macabre", "Fantastic", "Angry", "Nasty", "Fine"];
+const WORDS_ADJ = ["Elite", "Devilish", "Decent", "Cuddly", "Graceful", "Lovely", "Mundane",
+    "Macabre", "Fantastic", "Angry", "Nasty", "Fine"];
 const WORDS_NOUN = ["Beetle", "Warthog", "Bear", "Fox", "Horse", "Mongoose", "Rooster",
     "Jackal", "Sheep", "Iguana", "Worm", "Buffalo", "Weasel"];
 
@@ -44,7 +44,7 @@ function RandomName(s="an") {
     for (let i = 0; i < s.length; i++) {
         const w = s[i] === "a" ? WORDS_ADJ : s[i] === "n" ? WORDS_NOUN : [];
         if (w.length === 0) { continue; }
-        str += w[Math.round(Math.random() * w.length)] + " ";
+        str += w[Math.floor(Math.random() * w.length)] + " ";
     }
     return str.trim();
 }
