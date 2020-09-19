@@ -362,8 +362,10 @@ class LocalPlay {
                                 // Update all objects.
                                 if (o.t === "w" || o.t === "g" || o.t === "m") {
                                     this._objs[o.i].Update(o.s.x, o.s.y);
-                                } else if (o.t === "b" || o.t === "u" || o.t === "p") {
+                                } else if (o.t === "b" || o.t === "p") {
                                     this._objs[o.i].Update(o.s.x, o.s.y, o.s.vx, o.s.vy, o.s.va, o.s.a);
+                                } else if (o.t === "u") {
+                                    this._objs[o.i].Update(o.s.x, o.s.y, o.s.vx, o.s.vy, o.s.va, o.s.a, o.s.p);
                                 }
                             } else if (o.a === "r") {
                                 if (o.i in this._objs) {
@@ -648,6 +650,8 @@ class Draw_UserBall {
         this.radius = r;
         this.color = PIXI.utils.string2hex(c);
         this.type = "u";
+
+        this._powerup = -1;
         
         this._body = Bodies.circle(this.x, this.y, this.radius, 12);
         this._body.restitution = 0.5;
@@ -665,10 +669,16 @@ class Draw_UserBall {
         this._min_speed_for_pebbles = 1.5;
 
         this._is_local_player = false;
+        this._applied_texture = false;
 
+        // TODO: not every player should have an arrow....
         this._arrow_texture = null;
         this._arrow = null;
         this._arrow_timer = 0;
+
+        // TODO: not every player should have a powerup
+        this._powerup_texture = null;
+        this._powerup_sprite = null;
     }
     
     ApplyTexture() {
@@ -690,12 +700,28 @@ class Draw_UserBall {
         this._arrow.position.set(this.x, this.y - this.radius*4);
         this._arrow.anchor.set(0.5);
         this._arrow.rotation = Math.PI/2;
+        this._arrow.visible = this._is_local_player;
         stage.addChild(this._arrow);
+
+        this._powerup_texture = new PIXI.Texture(textures_cache.powerup_sprites,
+            new PIXI.Rectangle(0, 0, 128, 128));
+        this._powerup_sprite = new PIXI.Sprite(this._powerup_texture);
+        this._powerup_sprite.width = 128;
+        this._powerup_sprite.height = 128;
+        this._powerup_sprite.position.set(WIDTH - 90, HEIGHT - 90);
+        this._powerup_sprite.anchor.set(0.5);
+        this._powerup_sprite.visible = false;
+        ui.addChild(this._powerup_sprite);
+
+        this._applied_texture = true;
     }
 
     LocalPlayer() {
         this._is_local_player = true;
         this._arrow_timer = 5000;
+        if (this._arrow !== null) {
+            this._arrow.visible = true;
+        }
     }
 
     Destroy() {
@@ -707,9 +733,13 @@ class Draw_UserBall {
         if (this._arrow !== null) {
             stage.removeChild(this._arrow);
         }
+
+        if (this._powerup_sprite !== null) {
+            ui.removeChild(this._powerup_sprite);
+        }
     }
 
-    Update(x, y, vx, vy, va, a) {
+    Update(x, y, vx, vy, va, a, p) {
         this.x = x;
         this.y = y;
         Body.setPosition(this._body, {x:x, y:y});
@@ -725,6 +755,18 @@ class Draw_UserBall {
         }
 
         this._last_speed = new_speed;
+
+        // Detecting when powerups are used/collected.
+        if (this._powerup === -1 && p !== -1) {
+            console.log("collected powerup " + p);
+            this._powerup_sprite.visible = true;
+            this._powerup_sprite.tint = POWERUP_TO_COLOR[p];
+        } else if (this._powerup !== -1 && p === -1) {
+            console.log("used powerup " + this._powerup);
+            this._powerup_sprite.visible = false;
+        }
+
+        this._powerup = p;
     }
 
     Tick(dT) {
@@ -744,6 +786,10 @@ class Draw_UserBall {
                     this._arrow.visible = false;
                 }
             }
+        }
+        
+        if (this._powerup !== -1) {
+            this._powerup_sprite.rotation += dT/1000;
         }
     }
 
@@ -990,7 +1036,7 @@ class Draw_Powerup {
         this.x = x;
         this.y = y;
         this.radius = r;
-        this.color = tn === 0 ? 0xff0000 : 0xffffff;
+        this.color = POWERUP_TO_COLOR[tn];
         this.type = "p";
 
         this.active = true;

@@ -59,6 +59,7 @@ s: specs (array)
         va: angular velocity
         a: angle
         tn: texture number
+        p: powerup (userballs only)
 
 ---------------------------------------------------------------------------------------------------
 CLIENT -> SERVER

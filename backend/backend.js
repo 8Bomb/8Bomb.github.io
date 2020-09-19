@@ -227,6 +227,9 @@ class Engine_8Bomb {
             if (type === "u" || type === "p") {
                 specs.s.tn = o.texture_num;
             }
+            if (type === "u") {
+                specs.s.p = o.powerup;
+            }
         }
         return specs;
     }
@@ -833,7 +836,6 @@ class UserBall {
 
         this.active = true;
         this.type = "u";
-        this.powerup = -1;
 
         this._keys = {w:false, a:false, s:false, d:false};
         
@@ -843,7 +845,7 @@ class UserBall {
 
         this._max_speed = 15;
 
-        this._powerup = -1;
+        this.powerup = -1;
     }
 
     Key(k, d) {
@@ -883,8 +885,8 @@ class UserBall {
     }
 
     CollectPowerup(t) {
-        if (this._powerup === -1) {
-            this._powerup = t.texture_num;
+        if (this.powerup === -1) {
+            this.powerup = t.texture_num;
             return true;
         }
         return false;
@@ -953,9 +955,9 @@ class UserBall {
             }
         }
 
-        if (this._keys["e"] && this._powerup !== -1) {
-            engine.ApplyPowerup(this, this._powerup);
-            this._powerup = -1;
+        if (this._keys["e"] && this.powerup !== -1) {
+            engine.ApplyPowerup(this, this.powerup);
+            this.powerup = -1;
         }
 
         this.x = E8B.Sigs(this._body.position.x);

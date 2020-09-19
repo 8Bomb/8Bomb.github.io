@@ -83,6 +83,7 @@ let textures_cache = {
     bomb_sprites: null,
     powerup_sprites: null,
     ground: null,
+    various: null,
 };
 
 const FPS_LOG_RATE = 10000; // ms
@@ -90,6 +91,11 @@ const DATA_LOG_RATE = 10000; // ms
 const PING_RATE = 3000; // ms
 
 const RAD_TO_DEG = 57.296;
+
+const POWERUP_TO_COLOR = {
+    0: 0xff0000,
+    1: 0x00ff00,
+};
 
 function Tick() {
     let now = window.performance.now();
